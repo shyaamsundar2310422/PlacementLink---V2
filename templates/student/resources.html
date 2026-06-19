@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}Resources & Notifications{% endblock %}
+
+{% block content %}
+<div style="display: flex; gap: 2rem;">
+    <!-- Left Column: Announcements & Training -->
+    <div style="flex: 2;">
+        <h2 style="margin-bottom: 1.5rem;"><i class="fas fa-bullhorn text-warning"></i> Announcements</h2>
+        <div style="display: grid; gap: 1rem; margin-bottom: 3rem;">
+            {% for n in notifications %}
+            <div style="background: var(--surface-light); padding: 1rem 1.5rem; border-radius: 8px; border-left: 4px solid {% if n.type == 'urgent' %}var(--danger){% elif n.type == 'deadline' %}var(--warning){% elif n.type == 'placement' %}var(--accent){% else %}var(--primary){% endif %};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <h4 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                        {% if n.type == 'urgent' %}<i class="fas fa-exclamation-circle text-danger"></i>
+                        {% elif n.type == 'deadline' %}<i class="fas fa-hourglass-half text-warning"></i>
+                        {% elif n.type == 'training' %}<i class="fas fa-graduation-cap text-primary"></i>
+                        {% elif n.type == 'document' %}<i class="fas fa-file-upload text-accent"></i>
+                        {% elif n.type == 'placement' %}<i class="fas fa-trophy text-accent"></i>
+                        {% else %}<i class="fas fa-bullhorn text-primary"></i>{% endif %}
+                        {{ n.title }}
+                    </h4>
+                    <span class="text-muted" style="font-size: 0.8rem;">{{ n.created_at.strftime('%b %d, %Y') }}</span>
+                </div>
+                <div style="margin-bottom: 0.55rem;">
+                    <span class="badge" style="background: rgba(255,255,255,0.08); text-transform: capitalize;">{{ n.type or 'announcement' }}</span>
+                </div>
+                <p style="font-size: 0.95rem;">{{ n.message }}</p>
+            </div>
+            {% else %}
+            <p class="text-muted">No recent announcements.</p>
+            {% endfor %}
+        </div>
+
+        <h2 style="margin-bottom: 1.5rem;"><i class="fas fa-laptop-code text-accent"></i> Training Materials</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            {% for t in training %}
+            <div class="card" style="padding: 1.2rem;">
+                <h4>
+                    {% if t.resource_type == 'video' %}<i class="fas fa-video text-danger"></i>
+                    {% elif t.resource_type == 'document' %}<i class="fas fa-file-pdf text-primary"></i>
+                    {% else %}<i class="fas fa-link text-accent"></i>{% endif %}
+                    {{ t.title }}
+                </h4>
+                <p class="text-muted" style="font-size: 0.85rem; margin: 0.5rem 0 1rem 0;">{{ t.description }}</p>
+                <a href="{{ t.url }}" target="_blank" class="btn btn-block" style="background: var(--surface-light); color: var(--text-main);">Access Resource <i class="fas fa-external-link-alt"></i></a>
+            </div>
+            {% else %}
+            <p class="text-muted">No training resources available right now.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Right Column: Document Uploads -->
+    <div style="flex: 1;">
+        <div class="card" style="position: sticky; top: 100px;">
+            <h3 style="margin-bottom: 1rem;"><i class="fas fa-file-upload text-primary"></i> My Documents</h3>
+            
+            <form action="/student/upload_document" method="POST" enctype="multipart/form-data" style="margin-bottom: 2rem;">
+                <div class="form-group">
+                    <label>Document Type</label>
+                    <select name="doc_type" class="form-control" required>
+                        <option value="Resume">Resume / CV</option>
+                        <option value="Marksheet">Marksheet</option>
+                        <option value="ID Proof">College ID / Govt ID</option>
+                        <option value="Certificate">Certificate</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <input type="file" name="document_file" class="form-control" required style="padding: 0.5rem;">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-upload"></i> Upload</button>
+            </form>
+
+            <h4>Uploaded Documents</h4>
+            <div style="margin-top: 1rem;">
+                {% for doc in documents %}
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.8rem; background: var(--surface-light); border-radius: 8px; margin-bottom: 0.5rem;">
+                    <div>
+                        <strong style="font-size: 0.9rem;">{{ doc.doc_type }}</strong>
+                        <p class="text-muted" style="font-size: 0.75rem;">{{ doc.uploaded_at.strftime('%b %d, %Y') }}</p>
+                    </div>
+                    <a href="{{ doc.file_path }}" target="_blank" class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;"><i class="fas fa-download"></i></a>
+                </div>
+                {% else %}
+                <p class="text-muted" style="font-size: 0.9rem;">No documents uploaded.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

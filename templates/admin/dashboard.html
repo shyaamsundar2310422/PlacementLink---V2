@@ -1,0 +1,306 @@
+﻿{% extends 'base.html' %}
+{% block title %}Placement Analytics Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 2rem;">
+    <h1>Admin Analytics Dashboard</h1>
+    <p class="text-muted">Overview of placement performance and statistics.</p>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <form method="GET" action="/admin/dashboard" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; align-items: end;">
+        <div>
+            <label for="year" class="text-muted" style="display: block; margin-bottom: 0.4rem;">Year-wise Data</label>
+            <select id="year" name="year" class="form-control">
+                <option value="">All Years</option>
+                {% for year in available_years %}
+                <option value="{{ year }}" {% if selected_year == year|string %}selected{% endif %}>{{ year }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="department" class="text-muted" style="display: block; margin-bottom: 0.4rem;">Department-wise Data</label>
+            <select id="department" name="department" class="form-control">
+                <option value="">All Departments</option>
+                {% for department in available_departments %}
+                <option value="{{ department }}" {% if selected_department == department %}selected{% endif %}>{{ department }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="display: flex; gap: 0.6rem; align-items: center;">
+            <button type="submit" class="btn"><i class="fas fa-filter"></i> Apply Filters</button>
+            <a href="/admin/dashboard" class="btn" style="background: var(--surface-light); color: var(--text-main);"><i class="fas fa-undo"></i> Reset</a>
+            <a href="/admin/dashboard/export?year={{ selected_year }}&department={{ selected_department }}" class="btn btn-primary"><i class="fas fa-download"></i> Export CSV</a>
+        </div>
+    </form>
+</div>
+
+<div class="dashboard-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+    <div class="card stat-card" style="border-top: 4px solid var(--primary);">
+        <h3 class="text-muted"><i class="fas fa-chart-line"></i> Placement %</h3>
+        <p style="font-size: 2.2rem; font-weight: 800; color: var(--text-main);">{{ stats.placement_percentage }}%</p>
+    </div>
+    <div class="card stat-card" style="border-top: 4px solid var(--accent);">
+        <h3 class="text-muted"><i class="fas fa-rupee-sign"></i> Highest CTC</h3>
+        <p style="font-size: 2.2rem; font-weight: 800; color: var(--text-main);">{{ stats.highest_ctc }} LPA</p>
+    </div>
+    <div class="card stat-card" style="border-top: 4px solid var(--warning);">
+        <h3 class="text-muted"><i class="fas fa-coins"></i> Average CTC</h3>
+        <p style="font-size: 2.2rem; font-weight: 800; color: var(--text-main);">{{ stats.average_ctc }} LPA</p>
+    </div>
+    <div class="card stat-card" style="border-top: 4px solid var(--danger);">
+        <h3 class="text-muted"><i class="fas fa-user-graduate"></i> Placed</h3>
+        <p style="font-size: 2.2rem; font-weight: 800; color: var(--text-main);">{{ stats.total_placed }}</p>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h3>Placement Trend</h3>
+    <canvas id="trendChart" width="900" height="260"></canvas>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 2rem;">
+    <div class="card">
+        <h3>Department-wise Placements</h3>
+        <canvas id="deptChart" width="400" height="250"></canvas>
+    </div>
+    <div class="card">
+        <h3>Top Recruiting Companies</h3>
+        <canvas id="companyChart" width="400" height="250"></canvas>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; margin-top: 2rem;">
+    <div class="card">
+        <h3>Department Performance</h3>
+        <div class="table-container" style="margin-top: 1rem;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Department</th>
+                        <th>Total Students</th>
+                        <th>Placed</th>
+                        <th>Placement %</th>
+                        <th>Highest CTC</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dept in department_performance %}
+                    <tr>
+                        <td>{{ dept.department }}</td>
+                        <td>{{ dept.total_students }}</td>
+                        <td>{{ dept.placed_students }}</td>
+                        <td>{{ dept.placement_percentage }}%</td>
+                        <td>{{ dept.highest_ctc }} LPA</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 2rem;">No department data available.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Company Selection Ratios</h3>
+        <div class="table-container" style="margin-top: 1rem;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Company</th>
+                        <th>Apps</th>
+                        <th>Selected</th>
+                        <th>Ratio</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for company in company_ratios %}
+                    <tr>
+                        <td>{{ company.company_name }}</td>
+                        <td>{{ company.total_applications }}</td>
+                        <td>{{ company.selected_count }}</td>
+                        <td>{{ company.selection_ratio }}%</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 2rem;">No application data available.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h3><i class="fas fa-calendar-alt text-primary"></i> Upcoming Drive Calendar</h3>
+    <div style="display: grid; gap: 1rem; margin-top: 1rem;">
+        {% for drive in upcoming_drives %}
+        <div style="display: grid; grid-template-columns: 110px 1fr; gap: 1rem; align-items: center; padding: 1rem; background: var(--surface-light); border-radius: 12px; border: 1px solid var(--glass-border);">
+            <div style="text-align: center; padding: 0.8rem; border-radius: 10px; background: rgba(99,102,241,0.14);">
+                <div style="font-size: 0.85rem; color: var(--text-muted);">{{ drive.day }}</div>
+                <div style="font-size: 1.3rem; font-weight: 800; color: var(--primary);">{{ drive.date[8:10] }}</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">{{ drive.date[:7] }}</div>
+            </div>
+            <div>
+                <div style="font-size: 1.1rem; font-weight: 700;">{{ drive.company }}</div>
+                <div class="text-muted" style="margin-top: 0.25rem;">{{ drive.event }}</div>
+                <div style="margin-top: 0.45rem; font-size: 0.92rem;"><i class="fas fa-map-marker-alt text-warning"></i> {{ drive.location }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h3>Status Update Audit History</h3>
+    <div class="table-container" style="margin-top: 1rem;">
+        <table>
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Student</th>
+                    <th>Company</th>
+                    <th>Role</th>
+                    <th>Status Change</th>
+                    <th>Changed By</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in audit_history %}
+                <tr>
+                    <td>{{ item.changed_at }}</td>
+                    <td>{{ item.first_name }} {{ item.last_name }}<br><span class="text-muted" style="font-size: 0.85rem;">{{ item.register_number }}</span></td>
+                    <td>{{ item.company_name }}</td>
+                    <td>{{ item.title }}</td>
+                    <td>{{ item.previous_stage or 'New' }} &rarr; {{ item.new_stage }}</td>
+                    <td>{{ item.changed_by_username or 'System' }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 2rem;">No status changes have been audited yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h3>Recent Placements</h3>
+    <div class="table-container" style="margin-top: 1rem;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Department</th>
+                    <th>Company</th>
+                    <th>Role</th>
+                    <th>Location</th>
+                    <th>CTC</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for placement in recent_placements %}
+                <tr>
+                    <td>{{ placement.first_name }} {{ placement.last_name }}<br><span class="text-muted" style="font-size: 0.85rem;">{{ placement.register_number }}</span></td>
+                    <td>{{ placement.department }}</td>
+                    <td>{{ placement.company_name }}</td>
+                    <td>{{ placement.title }}</td>
+                    <td>{{ placement.location or 'N/A' }}</td>
+                    <td>{{ placement.ctc }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 2rem;">No students have been marked as placed yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const deptData = JSON.parse('{{ dept_data_json | safe }}');
+    const companyData = JSON.parse('{{ company_data_json | safe }}');
+    const trendData = JSON.parse('{{ trend_data_json | safe }}');
+
+    const ctxTrend = document.getElementById('trendChart').getContext('2d');
+    new Chart(ctxTrend, {
+        type: 'line',
+        data: {
+            labels: Object.keys(trendData).length ? Object.keys(trendData) : ['No Data'],
+            datasets: [{
+                label: 'Placed Students',
+                data: Object.keys(trendData).length ? Object.values(trendData) : [0],
+                borderColor: 'rgba(16, 185, 129, 1)',
+                backgroundColor: 'rgba(16, 185, 129, 0.18)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.35
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    const ctxDept = document.getElementById('deptChart').getContext('2d');
+    new Chart(ctxDept, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(deptData).length ? Object.keys(deptData) : ['No Data'],
+            datasets: [{
+                label: 'Placed Students',
+                data: Object.keys(deptData).length ? Object.values(deptData) : [0],
+                backgroundColor: 'rgba(99, 102, 241, 0.7)',
+                borderColor: 'rgba(99, 102, 241, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    const ctxCompany = document.getElementById('companyChart').getContext('2d');
+    new Chart(ctxCompany, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(companyData).length ? Object.keys(companyData) : ['No Data'],
+            datasets: [{
+                data: Object.keys(companyData).length ? Object.values(companyData) : [1],
+                backgroundColor: [
+                    'rgba(99, 102, 241, 0.8)',
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(245, 158, 11, 0.8)',
+                    'rgba(239, 68, 68, 0.8)',
+                    'rgba(139, 92, 246, 0.8)',
+                    'rgba(236, 72, 153, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            cutout: '70%'
+        }
+    });
+</script>
+{% endblock %}

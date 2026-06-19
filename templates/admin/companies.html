@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}Manage Companies{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <div>
+            <h2><i class="fas fa-building text-primary"></i> Manage Companies</h2>
+            <p class="text-muted">Add and view recruiting companies.</p>
+        </div>
+        <button class="btn" onclick="document.getElementById('addCompanyForm').style.display='block'">
+            <i class="fas fa-plus"></i> Add Company
+        </button>
+    </div>
+
+    <div id="addCompanyForm" style="display: none; background: var(--surface-light); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; border: 1px solid var(--glass-border);">
+        <h3 style="margin-bottom: 1rem;">Add New Company</h3>
+        <form method="POST">
+            <div class="form-group">
+                <label>Company Name</label>
+                <input type="text" name="name" class="form-control" required placeholder="e.g. Google, Microsoft">
+            </div>
+            <div class="form-group">
+                <label>Website URL</label>
+                <input type="url" name="website_url" class="form-control" placeholder="https://company.com">
+            </div>
+            <div class="form-group">
+                <label>Company Profile</label>
+                <textarea name="profile" class="form-control" rows="3" placeholder="Description of the company..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Past Recruitment History</label>
+                <textarea name="past_history" class="form-control" rows="2" placeholder="e.g. Recruited 50 students in 2024"></textarea>
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
+                <button type="button" class="btn btn-danger" onclick="document.getElementById('addCompanyForm').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Company</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Company Name</th>
+                    <th>Website</th>
+                    <th>Profile</th>
+                    <th>History</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for company in companies %}
+                <tr>
+                    <td style="font-weight: 600;">{{ company.name }}</td>
+                    <td>
+                        {% if company.website_url %}
+                        <a href="{{ company.website_url }}" target="_blank" rel="noopener noreferrer">Visit site</a>
+                        {% else %}
+                        N/A
+                        {% endif %}
+                    </td>
+                    <td>{{ company.profile[:60] ~ '...' if company.profile else 'N/A' }}</td>
+                    <td>{{ company.past_history[:60] ~ '...' if company.past_history else 'N/A' }}</td>
+                    <td>
+                        <button class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;"><i class="fas fa-edit"></i></button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 2rem;">No companies added yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

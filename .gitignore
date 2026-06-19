@@ -1,0 +1,22 @@
+﻿ï»¿
+.env
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.log
+*.txt
+error_log.txt
+# Local database/runtime artifacts
+.localdb/
+*.pid
+*.sock
+*.err
+
+# OS/editor metadata
+.DS_Store
+.vscode/
+
+
+static/uploads/
+.env

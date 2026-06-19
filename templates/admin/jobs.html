@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% block title %}Manage Job Postings{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <div>
+            <h2><i class="fas fa-briefcase text-primary"></i> Job Postings</h2>
+            <p class="text-muted">Post new job opportunities and manage existing ones.</p>
+        </div>
+        <button class="btn" onclick="document.getElementById('addJobForm').style.display='block'">
+            <i class="fas fa-plus"></i> Post Job
+        </button>
+    </div>
+
+    <div id="addJobForm" style="display: none; background: var(--surface-light); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; border: 1px solid var(--glass-border);">
+        <h3 style="margin-bottom: 1rem;">Post New Job Opportunity</h3>
+        <form method="POST">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Company</label>
+                    <select name="company_id" class="form-control" required>
+                        <option value="">Select Company</option>
+                        {% for c in companies %}
+                        <option value="{{ c.id }}">{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Job Title</label>
+                    <input type="text" name="title" class="form-control" required placeholder="e.g. Software Engineer">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Job Role</label>
+                    <input type="text" name="role" class="form-control" placeholder="e.g. Full Stack Developer">
+                </div>
+                <div class="form-group">
+                    <label>Location</label>
+                    <input type="text" name="location" class="form-control" placeholder="e.g. Bengaluru, Mumbai, Hyderabad">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>CTC (Salary Package)</label>
+                    <input type="text" name="ctc" class="form-control" placeholder="e.g. 10 LPA">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Minimum CGPA Required</label>
+                    <input type="number" step="0.01" name="min_cgpa" class="form-control" value="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Maximum Active Backlogs Allowed</label>
+                    <input type="number" name="max_backlogs" class="form-control" value="0">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Allowed Departments <span class="text-muted">(Ctrl+Click to multiselect)</span></label>
+                    <select name="allowed_departments" class="form-control" multiple required style="height: 120px;">
+                        <option value="All">All Departments</option>
+                        <option value="Computer Science">Computer Science</option>
+                        <option value="Information Technology">Information Technology</option>
+                        <option value="Electronics">Electronics and Communication</option>
+                        <option value="Electrical">Electrical and Electronics</option>
+                        <option value="Mechanical">Mechanical Engineering</option>
+                        <option value="Civil">Civil Engineering</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Application Deadline</label>
+                    <input type="date" name="application_deadline" class="form-control" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Eligibility Criteria Description</label>
+                <textarea name="eligibility_criteria" class="form-control" rows="2" placeholder="Detail any other specific rules..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Required Skills</label>
+                <textarea name="required_skills" class="form-control" rows="2" placeholder="e.g. Python, Django, React, AWS"></textarea>
+            </div>
+
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
+                <button type="button" class="btn btn-danger" onclick="document.getElementById('addJobForm').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Publish Job Posting</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Company</th>
+                    <th>Role</th>
+                    <th>Location</th>
+                    <th>CTC</th>
+                    <th>Deadline</th>
+                    <th>Eligibility</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for job in jobs %}
+                <tr>
+                    <td style="font-weight: 600;">
+                        {{ job.company_name }}
+                        {% if job.website_url %}
+                        <div><a href="{{ job.website_url }}" target="_blank" rel="noopener noreferrer" style="font-size: 0.85rem;">Company website</a></div>
+                        {% endif %}
+                    </td>
+                    <td>{{ job.title }}</td>
+                    <td>{{ job.location or 'N/A' }}</td>
+                    <td style="color: var(--accent); font-weight: 600;">{{ job.ctc }}</td>
+                    <td>{{ job.application_deadline }}</td>
+                    <td>
+                        <span class="badge" style="background: rgba(255,255,255,0.1);">CGPA: {{ job.min_cgpa }}+</span>
+                        <span class="badge" style="background: rgba(255,255,255,0.1);">Backlogs: &le;{{ job.max_backlogs }}</span>
+                    </td>
+                    <td>
+                        <a href="/admin/job/{{ job.id }}/applications" class="btn btn-accent" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
+                            <i class="fas fa-users"></i> Applicants
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 2rem;">No jobs posted yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,53 @@
+﻿{% extends 'base.html' %}
+{% block title %}Profile Update Requests{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2><i class="fas fa-envelope-open-text"></i> Pending Profile Update Requests</h2>
+    <p class="text-muted" style="margin-bottom: 2rem;">Review and approve changes submitted by your students.</p>
+
+    {% if requests %}
+        <div style="display: grid; gap: 1.5rem;">
+        {% for req in requests %}
+            <div class="request-card" style="background: var(--surface-light); padding: 1.5rem; border-radius: 12px; border-left: 4px solid var(--warning);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h3 style="margin-bottom: 0.5rem;">{{ req.first_name }} {{ req.last_name }} <span class="text-muted" style="font-size: 0.9rem; font-weight: 400;">({{ req.register_number }})</span></h3>
+                        <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">Requested on: {{ req.request_date.strftime('%Y-%m-%d %H:%M') }}</p>
+                    </div>
+                    <div style="display: flex; gap: 0.8rem; flex-wrap: wrap; align-items: flex-end;">
+                        <form action="/mentor/request/{{ req.id }}" method="POST" style="margin: 0;">
+                            <input type="hidden" name="action" value="approve">
+                            <button type="submit" class="btn btn-accent"><i class="fas fa-check"></i> Approve</button>
+                        </form>
+                        <form action="/mentor/request/{{ req.id }}" method="POST" style="margin: 0; min-width: 280px;">
+                            <input type="hidden" name="action" value="reject">
+                            <textarea name="rejection_reason" class="form-control" placeholder="Optional: reason for rejection" style="min-height: 90px; margin-bottom: 0.6rem;"></textarea>
+                            <button type="submit" class="btn btn-danger"><i class="fas fa-times"></i> Reject</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="changes-list" style="background: var(--surface); padding: 1rem; border-radius: 8px;">
+                    <h4 style="font-size: 1rem; margin-bottom: 0.5rem;"><i class="fas fa-edit"></i> Requested Values:</h4>
+                    <ul style="list-style-type: none;">
+                        {% for key, value in req.changes_dict.items() %}
+                            <li style="margin-bottom: 0.5rem;">
+                                <span class="text-muted" style="display: inline-block; width: 120px; text-transform: capitalize;">{{ key.replace('_', ' ') }}:</span> 
+                                <span style="font-weight: 500;">{{ value or 'Not provided' }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        {% endfor %}
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 3rem 0; color: var(--text-muted);">
+            <i class="fas fa-check-circle" style="font-size: 3rem; color: var(--accent); margin-bottom: 1rem;"></i>
+            <h3>All Caught Up!</h3>
+            <p>You have no pending profile update requests.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

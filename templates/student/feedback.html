@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Placement Feedback{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 600px; margin: 0 auto;">
+    <h2 style="margin-bottom: 1rem;"><i class="fas fa-comments text-accent"></i> Placement Feedback</h2>
+    <p class="text-muted" style="margin-bottom: 2rem;">Help your juniors by sharing your interview experience.</p>
+
+    {% if past_jobs %}
+    <form method="POST">
+        <div class="form-group">
+            <label>Select Company & Role you were placed in</label>
+            <select name="application_id" class="form-control" required>
+                <option value="">Choose Application...</option>
+                {% for app in past_jobs %}
+                <option value="{{ app.application_id }}">{{ app.company_name }} - {{ app.title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Interview Process Rating (1-5)</label>
+                <input type="number" min="1" max="5" name="interview_rating" class="form-control" required placeholder="5">
+            </div>
+            <div class="form-group">
+                <label>Overall Company Rating (1-5)</label>
+                <input type="number" min="1" max="5" name="company_rating" class="form-control" required placeholder="4">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Difficulty Level</label>
+            <select name="difficulty" class="form-control" required>
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+                <option value="Very Hard">Very Hard</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Your Suggestions / Interview Questions Asked</label>
+            <textarea name="suggestions" class="form-control" rows="5" required placeholder="What questions were asked? What should juniors prepare for?"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-accent btn-block"><i class="fas fa-paper-plane"></i> Submit Feedback</button>
+    </form>
+    {% else %}
+    <div style="text-align: center; padding: 2rem;">
+        <i class="fas fa-info-circle text-muted" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+        <p>You can only submit feedback for applications where you have been successfully 'Selected'. Currently, you have no such records.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+﻿{% extends 'base.html' %}
+{% block title %}Manage Applications{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h2><i class="fas fa-users text-primary"></i> Applicants for {{ job.title }}</h2>
+        <p class="text-muted">{{ job.company_name }} | {{ job.ctc }}</p>
+    </div>
+    <a href="/admin/jobs" class="btn" style="background: var(--surface-light); color: var(--text-main);"><i class="fas fa-arrow-left"></i> Back to Jobs</a>
+</div>
+
+<div class="card">
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Student Name</th>
+                    <th>Reg. Number</th>
+                    <th>Dept.</th>
+                    <th>CGPA</th>
+                    <th>Current Stage</th>
+                    <th>Update Stage</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for app in applications %}
+                <tr>
+                    <td style="font-weight: 600;">{{ app.first_name }} {{ app.last_name }}</td>
+                    <td>{{ app.register_number }}</td>
+                    <td>{{ app.department }}</td>
+                    <td style="color: var(--accent); font-weight: 600;">{{ app.cgpa }}</td>
+                    <td>
+                        <span class="badge" style="background: var(--surface-light);">{{ app.stage }}</span>
+                    </td>
+                    <td>
+                        <form action="/admin/application/{{ app.application_id }}/status" method="POST" style="display: flex; gap: 0.5rem;">
+                            <input type="hidden" name="job_id" value="{{ job.id }}">
+                            <select name="new_stage" class="form-control" style="padding: 0.3rem; height: auto;" required>
+                                <option value="" disabled selected>Change Status...</option>
+                                <option value="Selected">Placed</option>
+                                <option value="Rejected">Rejected</option>
+                            </select>
+                            <button type="submit" class="btn btn-primary" style="padding: 0.3rem 0.6rem;"><i class="fas fa-save"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 2rem;">No applications received for this job yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

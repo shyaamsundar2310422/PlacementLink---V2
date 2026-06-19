@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Student Profile{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h1>{{ student.first_name }} {{ student.last_name }}</h1>
+        <p class="text-muted">{{ student.register_number }} | {{ student.department }}</p>
+    </div>
+    <a href="/mentor/students" class="btn" style="background: var(--surface-light); color: var(--text-main);"><i class="fas fa-arrow-left"></i> Back to Students</a>
+</div>
+
+<div class="dashboard-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem;">
+    <div class="card stat-card">
+        <h3 class="text-muted"><i class="fas fa-graduation-cap"></i> CGPA</h3>
+        <p style="font-size: 2.3rem; font-weight: 800; color: var(--accent);">{{ student.cgpa or '0.00' }}</p>
+    </div>
+    <div class="card stat-card">
+        <h3 class="text-muted"><i class="fas fa-book-open"></i> Active Backlogs</h3>
+        <p style="font-size: 2.3rem; font-weight: 800; color: {% if student.backlog_count and student.backlog_count > 0 %}var(--warning){% else %}var(--text-main){% endif %};">{{ student.backlog_count or 0 }}</p>
+    </div>
+    <div class="card stat-card">
+        <h3 class="text-muted"><i class="fas fa-phone"></i> Contact</h3>
+        <p style="font-size: 1.2rem; font-weight: 700; color: var(--text-main);">{{ student.contact_number or 'Not added' }}</p>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 2rem;">
+    <div class="card">
+        <h3><i class="fas fa-code"></i> Skills</h3>
+        <p class="text-muted" style="margin-top: 1rem; line-height: 1.6;">{{ student.skills or 'No skills added yet.' }}</p>
+    </div>
+
+    <div class="card">
+        <h3><i class="fas fa-folder-open"></i> Projects</h3>
+        <p class="text-muted" style="margin-top: 1rem; line-height: 1.6;">{{ student.projects or 'No projects added yet.' }}</p>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem;">
+    <div class="card">
+        <h3><i class="fas fa-certificate"></i> Certifications</h3>
+        <p class="text-muted" style="margin-top: 1rem; line-height: 1.6;">{{ student.certifications or 'No certifications added yet.' }}</p>
+    </div>
+
+    <div class="card">
+        <h3><i class="fas fa-file-alt"></i> Resume</h3>
+        {% if student.resume_url %}
+        <a href="{{ student.resume_url }}" target="_blank" class="btn" style="margin-top: 1rem;">Open Resume <i class="fas fa-external-link-alt"></i></a>
+        {% else %}
+        <p class="text-muted" style="margin-top: 1rem;">Resume has not been uploaded yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

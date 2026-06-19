@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}Student Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 2rem;">
+    <h1>Welcome back, <span class="text-gradient">{{ student.first_name }}!</span></h1>
+    <p class="text-muted">Register Number: {{ student.register_number }} | {{ student.department }} Engineering</p>
+</div>
+
+<div class="dashboard-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+    <div class="card stat-card">
+        <h3 class="text-muted"><i class="fas fa-graduation-cap"></i> Current CGPA</h3>
+        <p style="font-size: 2.5rem; font-weight: 800; color: var(--accent);">{{ profile.cgpa or '0.00' }}</p>
+    </div>
+    <div class="card stat-card">
+        <h3 class="text-muted"><i class="fas fa-book-open"></i> Active Backlogs</h3>
+        {% if profile.backlog_count and profile.backlog_count > 0 %}
+        <p style="font-size: 2.5rem; font-weight: 800; color: var(--danger);">{{ profile.backlog_count }}</p>
+        {% else %}
+        <p style="font-size: 2.5rem; font-weight: 800; color: var(--text-main);">0</p>
+        {% endif %}
+    </div>
+    <div class="card stat-card">
+        <h3 class="text-muted"><i class="fas fa-briefcase"></i> Open Opportunities</h3>
+        <p style="font-size: 2.5rem; font-weight: 800; color: var(--primary);">{{ open_opportunity_count }}</p>
+        <p class="text-muted" style="font-size: 0.9rem;">Eligible roles right now</p>
+    </div>
+</div>
+
+<div class="dashboard-widgets" style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-top: 2rem;">
+    <div class="card">
+        <h3><i class="fas fa-bell"></i> Recent Notifications</h3>
+        {% if notifications %}
+            <div style="display: grid; gap: 1rem; margin-top: 1rem;">
+                {% for notification in notifications %}
+                <div style="padding: 1rem; border-radius: 10px; background: var(--surface-light); border: 1px solid var(--glass-border);">
+                    <div style="font-weight: 700; margin-bottom: 0.35rem;">{{ notification.title }}</div>
+                    <div class="text-muted" style="font-size: 0.92rem;">{{ notification.message }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-muted" style="margin-top: 1rem;">No new notifications right now.</p>
+        {% endif %}
+    </div>
+    <div class="card">
+        <h3><i class="fas fa-tasks"></i> Profile Completion</h3>
+        {% set completeness = 40 %}
+        {% if profile.cgpa %}{% set completeness = completeness + 20 %}{% endif %}
+        {% if profile.skills %}{% set completeness = completeness + 20 %}{% endif %}
+        {% if profile.resume_url %}{% set completeness = completeness + 20 %}{% endif %}
+        
+        <div style="margin-top: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span class="text-muted">Status</span>
+                {% if completeness == 100 %}
+                <span style="font-weight: 700; color: var(--accent);">{{ completeness }}%</span>
+                {% else %}
+                <span style="font-weight: 700; color: var(--warning);">{{ completeness }}%</span>
+                {% endif %}
+            </div>
+            <div style="width: 100%; background: var(--surface-light); border-radius: 8px; height: 10px; overflow: hidden;">
+                {% if completeness == 40 %}
+                <div style="width: 40%; background: var(--primary); height: 100%; transition: width 1s ease;"></div>
+                {% elif completeness == 60 %}
+                <div style="width: 60%; background: var(--primary); height: 100%; transition: width 1s ease;"></div>
+                {% elif completeness == 80 %}
+                <div style="width: 80%; background: var(--primary); height: 100%; transition: width 1s ease;"></div>
+                {% else %}
+                <div style="width: 100%; background: var(--primary); height: 100%; transition: width 1s ease;"></div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if completeness < 100 %}
+        <a href="/student/profile" class="btn btn-block" style="margin-top: 1.5rem;"><i class="fas fa-user-edit"></i> Complete Profile</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h3><i class="fas fa-calendar-alt text-primary"></i> Upcoming Company Visits</h3>
+    <p class="text-muted" style="margin-bottom: 1rem;">Keep track of which company is visiting campus on which date.</p>
+    <div style="display: grid; gap: 1rem;">
+        {% for drive in upcoming_drives %}
+        <div style="display: grid; grid-template-columns: 100px 1fr; gap: 1rem; align-items: center; padding: 1rem; background: var(--surface-light); border-radius: 12px; border: 1px solid var(--glass-border);">
+            <div style="text-align: center; padding: 0.8rem; border-radius: 10px; background: rgba(99,102,241,0.14);">
+                <div style="font-size: 0.8rem; color: var(--text-muted);">{{ drive.day }}</div>
+                <div style="font-size: 1.25rem; font-weight: 800; color: var(--primary);">{{ drive.date[8:10] }}</div>
+                <div style="font-size: 0.78rem; color: var(--text-muted);">{{ drive.date[:7] }}</div>
+            </div>
+            <div>
+                <div style="font-size: 1.05rem; font-weight: 700;">{{ drive.company }}</div>
+                <div class="text-muted" style="margin-top: 0.2rem;">{{ drive.event }}</div>
+                <div style="margin-top: 0.45rem; font-size: 0.92rem;"><i class="fas fa-map-marker-alt text-warning"></i> {{ drive.location }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

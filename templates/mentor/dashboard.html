@@ -1,0 +1,26 @@
+﻿{% extends 'base.html' %}
+{% block title %}Mentor Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 2rem;">
+    <h1>Welcome, <span class="text-gradient">Dr. {{ mentor.last_name }}</span></h1>
+    <p class="text-muted">Faculty ID: {{ mentor.faculty_id }} | {{ mentor.department }} Department</p>
+</div>
+
+<div class="dashboard-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+    <div class="card stat-card">
+        <h3 class="text-muted"><i class="fas fa-users text-primary"></i> Assigned Students</h3>
+        <p style="font-size: 2.5rem; font-weight: 800; color: var(--primary);">{{ student_count }}</p>
+        <a href="/mentor/students" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem;">View All <i class="fas fa-arrow-right"></i></a>
+    </div>
+    <div class="card stat-card">
+        <h3 class="text-muted"><i class="fas fa-envelope-open-text text-warning"></i> Pending Requests</h3>
+        {% if request_count > 0 %}
+        <p style="font-size: 2.5rem; font-weight: 800; color: var(--warning);">{{ request_count }}</p>
+        {% else %}
+        <p style="font-size: 2.5rem; font-weight: 800; color: var(--text-muted);">{{ request_count }}</p>
+        {% endif %}
+        <a href="/mentor/requests" style="color: var(--text-muted); text-decoration: none; font-size: 0.9rem;">Review Requests <i class="fas fa-arrow-right"></i></a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+{% block title %}Utilities Management{% endblock %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+    <div class="card">
+        <h2><i class="fas fa-bullhorn text-warning"></i> Placement Broadcast Center</h2>
+        <p class="text-muted" style="margin-top: 0.5rem;">Send placement updates, deadline reminders, document requests, and general announcements.</p>
+        <form method="POST" style="margin-top: 1.5rem;">
+            <input type="hidden" name="action" value="notification">
+            <div class="form-group">
+                <label>Announcement Title</label>
+                <input type="text" name="title" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Message</label>
+                <textarea name="message" class="form-control" rows="3" required></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Category</label>
+                    <select name="type" class="form-control">
+                        <option value="announcement">General Announcement</option>
+                        <option value="deadline">Deadline Reminder</option>
+                        <option value="training">Training Update</option>
+                        <option value="document">Document Request</option>
+                        <option value="placement">Placement Update</option>
+                        <option value="urgent">Urgent Notice</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Target Audience</label>
+                    <select name="target_role" class="form-control">
+                        <option value="all">Everyone</option>
+                        <option value="student">Students Only</option>
+                        <option value="mentor">Mentors Only</option>
+                        <option value="admin">Admins Only</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Target Department</label>
+                <select name="target_dept" class="form-control">
+                    <option value="all">All Departments</option>
+                    <option value="Computer Science">Computer Science</option>
+                    <option value="Information Technology">Information Technology</option>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Electrical">Electrical</option>
+                    <option value="Mechanical">Mechanical</option>
+                    <option value="Civil">Civil</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send Broadcast</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2><i class="fas fa-laptop-code text-accent"></i> Add Training Resource</h2>
+        <p class="text-muted" style="margin-top: 0.5rem;">Curate interview prep, coding sheets, resume guides, and mock test material.</p>
+        <form method="POST" style="margin-top: 1.5rem;">
+            <input type="hidden" name="action" value="training">
+            <div class="form-group">
+                <label>Resource Title</label>
+                <input type="text" name="title" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description" class="form-control" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Resource Type</label>
+                    <select name="resource_type" class="form-control">
+                        <option value="link">External Link</option>
+                        <option value="video">Video Tutorial</option>
+                        <option value="document">Document/PDF guide</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Resource URL</label>
+                    <input type="url" name="url" class="form-control" required placeholder="https://...">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-accent"><i class="fas fa-plus"></i> Add Resource</button>
+        </form>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h2><i class="fas fa-tower-broadcast text-primary"></i> Recent Broadcasts</h2>
+    <p class="text-muted" style="margin-top: 0.4rem;">Latest notices visible to students and mentors across dashboards and resources.</p>
+    <div style="display: grid; gap: 1rem; margin-top: 1.5rem;">
+        {% for n in notifications %}
+        <div style="padding: 1rem 1.2rem; border-radius: 12px; background: var(--surface-light); border: 1px solid var(--glass-border);">
+            <div style="display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin-bottom: 0.5rem;">
+                <div style="font-weight: 700;">{{ n.title }}</div>
+                <span class="text-muted" style="font-size: 0.82rem;">{{ n.created_at.strftime('%b %d, %Y %I:%M %p') }}</span>
+            </div>
+            <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.6rem;">
+                <span class="badge" style="background: rgba(99,102,241,0.16); color: var(--primary); text-transform: capitalize;">{{ n.type or 'announcement' }}</span>
+                <span class="badge" style="background: rgba(16,185,129,0.16); color: var(--accent); text-transform: capitalize;">{{ n.target_role }}</span>
+                <span class="badge" style="background: rgba(245,158,11,0.16); color: var(--warning);">{{ n.target_department }}</span>
+            </div>
+            <div class="text-muted" style="line-height: 1.45;">{{ n.message }}</div>
+        </div>
+        {% else %}
+        <p class="text-muted">No broadcasts yet. Use the form above to publish the first notice.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h2><i class="fas fa-book-open text-accent"></i> Training Resource Library</h2>
+    <div class="table-container" style="margin-top: 1.25rem;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                    <th>Link</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in training %}
+                <tr>
+                    <td style="font-weight: 600;">{{ t.title }}</td>
+                    <td style="text-transform: capitalize;">{{ t.resource_type }}</td>
+                    <td>{{ t.description }}</td>
+                    <td><a href="{{ t.url }}" target="_blank" rel="noopener noreferrer">Open</a></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" style="text-align: center; padding: 2rem;">No training resources added yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Student Feedback View -->
+<div class="card" style="margin-top: 2rem;">
+    <h2><i class="fas fa-comments text-primary"></i> Placement Experience Feedback</h2>
+    <div class="table-container" style="margin-top: 1.5rem;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Student Details</th>
+                    <th>Company/Role</th>
+                    <th>Ratings (Int/Co)</th>
+                    <th>Difficulty</th>
+                    <th>Suggestions/Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in feedback %}
+                <tr>
+                    <td><strong>{{ f.first_name }}</strong><br><span class="text-muted" style="font-size:0.85rem;">{{ f.department }}</span></td>
+                    <td>{{ f.company_name }}<br><span class="text-muted" style="font-size:0.85rem;">{{ f.job_title }}</span></td>
+                    <td>⭐ {{ f.interview_process_rating }} / ⭐ {{ f.company_experience_rating }}</td>
+                    <td><span class="badge" style="background: var(--surface-light);">{{ f.difficulty_level }}</span></td>
+                    <td style="font-size: 0.9rem; max-width: 300px; line-height: 1.3;">{{ f.suggestions }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 2rem;">No feedback submitted yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

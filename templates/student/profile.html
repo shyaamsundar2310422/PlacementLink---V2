@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="profile-container" style="max-width: 800px; margin: 0 auto;">
+    <div class="card glassmorphism">
+        <h2 style="font-size: 1.8rem;"><i class="fas fa-user-circle text-gradient"></i> Digital Profile</h2>
+        <p class="text-muted" style="margin-bottom: 2rem;">Notice: Any update requests must be approved by your mentor before reflecting in the system.</p>
+        
+        <form method="POST">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>First Name</label>
+                    <input type="text" class="form-control" value="{{ student.first_name }}" disabled style="opacity: 0.6;">
+                </div>
+                <div class="form-group">
+                    <label>Last Name</label>
+                    <input type="text" class="form-control" value="{{ student.last_name }}" disabled style="opacity: 0.6;">
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Register Number</label>
+                    <input type="text" class="form-control" value="{{ student.register_number }}" disabled style="opacity: 0.6;">
+                </div>
+                <div class="form-group">
+                    <label>Department</label>
+                    <input type="text" class="form-control" value="{{ student.department }}" disabled style="opacity: 0.6;">
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--glass-border); margin: 2rem 0;">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>CGPA</label>
+                    <input type="number" step="0.01" max="10" name="cgpa" class="form-control" value="{{ profile.cgpa }}" required>
+                </div>
+                <div class="form-group">
+                    <label>Active Backlogs</label>
+                    <input type="number" name="backlog_count" class="form-control" value="{{ profile.backlog_count }}" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Contact Number</label>
+                <input type="text" name="contact_number" class="form-control" value="{{ profile.contact_number or '' }}" placeholder="e.g. 9876543210">
+            </div>
+
+            <div class="form-group">
+                <label>Skills <span class="text-muted">(Comma separated)</span></label>
+                <input type="text" name="skills" class="form-control" value="{{ profile.skills or '' }}" placeholder="e.g. Python, React, SQL, Java">
+            </div>
+
+            <div class="form-group">
+                <label>Projects</label>
+                <textarea name="projects" class="form-control" rows="3" placeholder="Briefly describe your key academic and personal projects...">{{ profile.projects or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Certifications</label>
+                <textarea name="certifications" class="form-control" rows="2" placeholder="List any relevant certifications...">{{ profile.certifications or '' }}</textarea>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
+                <button type="submit" class="btn btn-accent btn-block" style="max-width: 300px;">
+                    <i class="fas fa-paper-plane"></i> Submit Update Request
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
