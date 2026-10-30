@@ -4,7 +4,10 @@ import time
 
 import requests
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
+_APP_ENV = os.getenv("APP_ENV", "development").lower()
+OLLAMA_URL = os.getenv("OLLAMA_URL")
+if OLLAMA_URL is None:
+    OLLAMA_URL = "" if _APP_ENV == "production" else "http://localhost:11434/api/generate"
 MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,10 @@ def ask_placement_agent(context, history, question):
     question = question.strip() if isinstance(question, str) else ""
     if not question:
         return "Please enter a question so I can help."
+
+    if not OLLAMA_URL.strip():
+        logger.info("placement_llm_unavailable category=not_configured")
+        return "The Placement AI service is not configured for this deployment. Resume feedback remains available through the local review."
 
     if is_small_talk(question):
         context = {}

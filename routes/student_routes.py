@@ -4,6 +4,8 @@ from markupsafe import escape
 import os
 import re
 import logging
+import mimetypes
+import tempfile
 from uuid import uuid4
 from config import Config
 from utils.decorators import role_required
@@ -26,6 +28,7 @@ from ml.embedding_service import (
 from flask import jsonify, request
 
 from services.placement_chat import get_chat_response, is_small_talk
+from services.file_storage import FileStorageError, store_file, uses_remote_storage
 student_bp = Blueprint('student', __name__, url_prefix='/student')
 logger = logging.getLogger(__name__)
 
@@ -251,9 +254,16 @@ def upload_student_document():
         flash("Unsupported file type. Upload PDF, DOC, DOCX, PNG, JPG, or JPEG files.", "danger")
         return redirect('/student/resources')
 
-    os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
     saved_filename = _build_upload_filename(student, uploaded_file.filename)
-    saved_path = os.path.join(Config.UPLOAD_FOLDER, saved_filename)
+    remote_storage = uses_remote_storage()
+    if remote_storage:
+        suffix = os.path.splitext(saved_filename)[1]
+        temporary = tempfile.NamedTemporaryFile(prefix='placementlink-upload-', suffix=suffix, delete=False)
+        saved_path = temporary.name
+        temporary.close()
+    else:
+        os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+        saved_path = os.path.join(Config.UPLOAD_FOLDER, saved_filename)
     uploaded_file.save(saved_path)
 
     public_file_path = f"/static/uploads/{saved_filename}"
@@ -276,7 +286,6 @@ def upload_student_document():
             flash("The PDF/DOCX could not be read or contains no selectable text. No resume was saved.", "danger")
             return redirect('/student/profile' if request.referrer and request.referrer.endswith('/student/profile') else '/student/resources')
 
-        upload_document(student['id'], doc_type, public_file_path)
         if resume_text:
             try:
                 semantic_profile = dict(get_student_profile(student['id']) or {})
@@ -300,6 +309,24 @@ def upload_student_document():
                 print(f"[ResumeEmbedding] generation_failed category={type(error).__name__}")
                 resume_embedding_json = None
 
+            if remote_storage:
+                try:
+                    store_file(saved_filename, saved_path, uploaded_file.mimetype or mimetypes.guess_type(saved_filename)[0])
+                except FileStorageError as error:
+                    logger.exception("document_storage_failed student_id=%s", student['id'])
+                    try:
+                        os.remove(saved_path)
+                    except OSError:
+                        pass
+                    flash("Resume storage is temporarily unavailable. The resume was not saved; please try again.", "danger")
+                    return redirect('/student/profile' if request.referrer and request.referrer.endswith('/student/profile') else '/student/resources')
+                try:
+                    os.remove(saved_path)
+                except OSError:
+                    pass
+
+            upload_document(student['id'], doc_type, public_file_path)
+
             update_resume_data(
                 student['id'],
                 resume_text,
@@ -314,6 +341,21 @@ def upload_student_document():
             else:
                 flash("Resume text was extracted and saved, but semantic embedding generation failed. Semantic match scores will remain unavailable until you upload the resume again when the model is available.", "warning")
     else:
+        if remote_storage:
+            try:
+                store_file(saved_filename, saved_path, uploaded_file.mimetype or mimetypes.guess_type(saved_filename)[0])
+            except FileStorageError:
+                logger.exception("document_storage_failed student_id=%s", student['id'])
+                try:
+                    os.remove(saved_path)
+                except OSError:
+                    pass
+                flash("Document storage is temporarily unavailable. The document was not saved; please try again.", "danger")
+                return redirect('/student/resources')
+            try:
+                os.remove(saved_path)
+            except OSError:
+                pass
         upload_document(student['id'], doc_type, public_file_path)
         flash("Document uploaded successfully.", "success")
 

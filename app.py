@@ -1,4 +1,4 @@
-from flask import Flask, render_template, session, redirect, jsonify, send_from_directory, abort
+from flask import Flask, render_template, session, redirect, jsonify, send_from_directory, abort, Response
 import os
 from extensions import mail
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -154,6 +154,21 @@ def create_app():
                 pass
             else:
                 abort(404)
+        from services.file_storage import FileStorageError, retrieve_file, uses_remote_storage
+        if uses_remote_storage():
+            try:
+                stored_file = retrieve_file(filename)
+            except ValueError:
+                abort(404)
+            except FileStorageError:
+                app.logger.exception('uploaded_file_storage_unavailable')
+                abort(503)
+            if stored_file is None:
+                abort(404)
+            contents, content_type = stored_file
+            response = Response(contents, mimetype=content_type)
+            response.headers['Cache-Control'] = 'private, no-store'
+            return response
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
     return app

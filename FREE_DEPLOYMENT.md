@@ -1,0 +1,129 @@
+# PlacementLink: zero-cost Vercel + Render deployment
+
+This is a **hobby/demo deployment recipe**, not a production reliability promise. It keeps the current Flask/Jinja application and its same-origin Vercel proxy. The existing paid-oriented `render.yaml` and `DEPLOYMENT.md` are retained; choose `render-free.yaml` for this free setup.
+
+## Free services and hard limits
+
+| Component | Free option | Relevant limits / caveats |
+|---|---|---|
+| Front door | Vercel Hobby | Free for personal, non-commercial use. This project only uses Vercel rewrites; Flask still renders every page. |
+| Flask | Render Free web service | 512 MB RAM / 0.1 CPU; sleeps after 15 minutes idle and takes about a minute to wake; 750 active instance-hours/workspace/month; filesystem is ephemeral and Free services cannot attach persistent disks. Quota exhaustion suspends service/builds, rather than billing if no payment method is added. |
+| MySQL-compatible database | TiDB Cloud Starter | Free quota currently includes 5 GiB row storage, 5 GiB columnar storage, and 50 million RUs/month for eligible MySQL Starter instances; no card required to start. At quota, new connections are refused until reset or quota is increased. |
+| Files | Supabase Storage Free, private bucket | 1 GB storage and 5 GB egress. Free projects may pause after a week of low database activity; resume them from the dashboard. Keep uploaded documents under quota. |
+| Semantic model | Existing MiniLM model, lazy-loaded on Render | **Not reliable on Render Free.** A local model-only measurement is already almost the full 512 MB service limit; see below. |
+| Ollama / live LLM | Optional remote endpoint | No Ollama process is installed or expected on Render. The free instance cannot host this model stack reliably. |
+
+Render also documents possible suspension for unusually high service-initiated external traffic, which includes database and object-storage calls. Render Free blocks outbound SMTP ports 25, 465, and 587, so the app's existing SMTP email notifications cannot be relied on in this setup. No paid service, payment method, overage, or consumption-based billing is required by this guide; if a service asks to enable billing, stop and do not enable it.
+
+The free provider quotas and terms can change. Check each dashboard's plan/usage screen before uploading any real files. Supabase Free projects can pause after 7 days of low activity, so object links may be temporarily unavailable until the project is resumed. TiDB quota exhaustion blocks new DB connections; this can make the whole app unavailable until the quota resets.
+
+## MiniLM memory check and semantic matching limitation
+
+I loaded the cached `sentence-transformers/all-MiniLM-L6-v2` model and generated a real 384-dimensional embedding in the local Windows Python 3.11 environment. The standalone Python model process reached **500.6 MiB peak resident working set** and about **1,500.8 MiB peak pagefile usage**. This measurement is from the local Windows environment, not a Render Linux instance, and does not establish Render memory behavior. It does show that the model process alone nearly fills Render Free's 512 MB limit, before application requests, Flask, Gunicorn, parsing, and outbound storage/database libraries are accounted for.
+
+The model is lazy-loaded so ordinary service boot/health checks do not download it. However, resume and JD uploads need embedding generation. A model load or embedding request can exceed the Render Free memory cap, be killed, or repeatedly download the model after an ephemeral restart. Therefore:
+
+- Do **not** claim semantic matching is operational on Render Free without a successful on-Render upload/model test and memory observation.
+- When both valid embeddings are already stored, the application's cosine calculation can still run without loading MiniLM. New or changed resumes/JDs still need MiniLM generation.
+- The existing code reports unavailable semantic results when embeddings are missing/invalid. It must not substitute a rule score for a semantic score.
+- To use semantic matching reliably, run the Flask service where at least the model's measured memory plus application headroom is available. That is outside this zero-cost Render setup; do not upgrade or enable billing as part of this guide.
+
+## 1. Deploy the Flask Blueprint to Render Free
+
+The repository must be available on your Git provider first. This guide does not push it. In Render, create a **new Blueprint** for this branch and set its Blueprint Path to `render-free.yaml` (do not sync it into an existing paid Blueprint that manages `render.yaml`). Select `deployment/vercel-render`, review the resource changes, and choose the Free plan only. The Blueprint defines a single Flask service with one Gunicorn worker/thread, `/healthz`, secure production sessions, and no Render disk.
+
+Render Blueprint environment values to provide:
+
+| Name | Value |
+|---|---|
+| `APP_ENV` | `production` |
+| `SECRET_KEY` | Generated by the Blueprint; keep stable and private. |
+| `DATABASE_URL` | TiDB MySQL connection URL below. |
+| `DB_SSL_MODE` | `verify_identity`; TiDB Starter public connections require TLS. |
+| `DB_SSL_CA` | Leave blank unless TiDB supplies a CA file you need to mount. |
+| `FILE_STORAGE_BACKEND` | `supabase` (set by the Blueprint). |
+| `SUPABASE_URL` | Project URL from Supabase settings. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only Storage key from Supabase settings. Never expose it in Vercel, browser JavaScript, or the repository. |
+| `SUPABASE_STORAGE_BUCKET` | `placementlink-documents` (set by the Blueprint). |
+| `OLLAMA_URL` | Empty by default. Set only to a reachable, separately hosted Ollama-compatible `/api/generate` endpoint. |
+
+The service's upload staging folder and Hugging Face cache use `/tmp`, which is ephemeral. Actual resumes, JDs, and other documents are sent to the private Supabase bucket. The embedding cache is lost on restart/sleep and may need another model download.
+
+After the first service creation, inspect its assigned hostname. If Render gives it a different hostname than `placementlink-backend.onrender.com`, update the `destination` in `vercel-frontend/vercel.json` before creating Vercel's project. This is a code setting, not a secret.
+
+## 2. Create a TiDB Cloud Starter MySQL database
+
+1. Create an eligible **TiDB Cloud Starter → MySQL-compatible** instance on the free plan. Do not turn on consumption-based billing. TiDB currently advertises no-card signup for Starter and the quotas in the table above.
+2. From the instance's **Connect** panel, copy its host, username (including the instance prefix), password, and port. Starter public connections require TLS and use port `4000`.
+3. Create a fresh database named `placement_db` and initialize it once with the existing `database/schema.sql` using a MySQL client. The schema file creates/selects `placement_db`. Do not import or reset an existing PlacementLink database as part of this setup.
+4. Give the application database user only the grants needed by the existing app, including its additive startup `CREATE`/`ALTER` migrations. Do not enable any paid quota overages.
+5. Set `DATABASE_URL` in Render. URL-encode reserved characters in the username/password:
+
+   ```text
+   mysql://PREFIX.root:URL_ENCODED_PASSWORD@YOUR_TIDB_HOST:4000/placement_db?ssl-mode=VERIFY_IDENTITY
+   ```
+
+   The application uses PyMySQL and TLS hostname verification through the existing database connector. TiDB speaks the MySQL protocol, but this specific PlacementLink schema, startup migrations, auth, and matching queries have **not** been run against a live TiDB instance in this preparation. Verify them on a disposable, empty Starter database before using it for real users. Starter is a shared, quota-limited service; at quota, connections can stop until the monthly reset.
+
+## 3. Create private Supabase Storage for uploads
+
+1. Create a Supabase project on the Free plan; do not upgrade the organization or add billing for overages.
+2. In **Storage**, create a bucket named `placementlink-documents`. Keep it **private**. Set the maximum object size to 16 MB and allow the application file types: PDF, DOC/DOCX, PNG, JPG/JPEG.
+3. In project settings, copy the project URL and a server-only `service_role` key. Put them only into Render's `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` secret fields. Never put the service key in the Vercel project or client-side code.
+4. Keep the bucket private. PlacementLink stores the existing `/static/uploads/<filename>` path in MySQL, but the authenticated Flask route fetches bytes from Supabase using the server key. Students, mentors, and admins continue to pass through the application's existing authorization checks; the bucket itself is not public.
+5. Monitor usage and stay below the Free plan's included storage/egress. At the quota, stop accepting test uploads until usage is within quota or the new monthly allowance is available. Do not enable paid overages.
+
+Supabase's Free storage is durable outside the Render filesystem, but the free project may pause after a week of low activity. Its free tier is not a high-availability document store. Export/back up important files separately before relying on it; this task does not migrate existing uploads.
+
+## 4. Deploy the Vercel Hobby proxy
+
+1. Create/import a Vercel project from this repository and select `deployment/vercel-render`.
+2. Set **Root Directory** to `vercel-frontend`, framework preset **Other**, and leave build/output commands empty. This root contains the existing rewrite proxy, not a second frontend build.
+3. Confirm `vercel-frontend/vercel.json` points at the Render service hostname over HTTPS. Deploy only after you explicitly approve a public deployment.
+4. No CORS changes are needed: the browser uses the Vercel origin and requests are proxied to Flask on the same origin. Flask production mode enables secure, HTTP-only, SameSite=Lax session cookies.
+
+Vercel Hobby is free for personal, non-commercial use. If PlacementLink is used commercially or for an institution's commercial service, check Vercel's current Hobby terms before deploying; this zero-cost option may not fit that use.
+
+## 5. Test the free deployment
+
+These checks require services created by you and are not claimed as completed here:
+
+1. Wait for Render to finish its first build/start; then check `/healthz` and `/readyz`. `/readyz` must reach TiDB. The first request after 15 idle minutes may take about a minute to wake the service; retry only after the Render loading/wake response completes.
+2. Sign in through Vercel and the direct Render URL. Verify student, admin, and mentor routes; confirm secure cookies over HTTPS.
+3. Upload a harmless PDF/DOCX resume as a student and a PDF/DOCX JD as an admin. Confirm the files appear in the private Supabase bucket, authenticated Flask file URLs work, and files are still available after Render sleeps/redeploys. Do not upload personal/student records for this free-tier test.
+4. Run `/student/all-jobs?sort=match` and Placement Intelligence with known stored embeddings. Check that missing embeddings are reported as unavailable, never as fabricated scores.
+5. Attempt a new resume and JD embedding only as a controlled test. If the Render service restarts, OOMs, or fails to return a genuine semantic result, record semantic embedding generation as unsupported/unreliable on this free service. Do not repeatedly retry if memory pressure occurs.
+6. Test Resume Review. Without a reachable configured Ollama endpoint, the existing local heuristic fallback should display its warning. Placement Chat will state that the AI endpoint is not configured. A live LLM response is not part of this deployment.
+7. Do not count email notifications as verified: Render Free blocks standard SMTP ports 25/465/587.
+
+## Local verification for this package
+
+From Python 3.11 in the repository root:
+
+```powershell
+python -m unittest discover -s tests -v
+python -m compileall -q app.py config.py database models routes services ml tests
+```
+
+Remote storage calls in the focused tests are mocked. No live Render, TiDB, Supabase, Vercel, Ollama, or email service is contacted by the tests.
+
+## Cost boundary and rollback
+
+The listed tiers are $0 only within their current free quotas and eligibility terms. Do not add a payment method, enable usage billing, provision a paid instance, or accept any upgrade prompt. Render suspends free services rather than billing overages if no payment method is present, but that means outages when limits are reached. Vercel Hobby is free for eligible personal use; TiDB Starter has no-card free quota; Supabase Free has bounded storage/egress and project pausing.
+
+To return to the previous deployment package, keep the Vercel proxy config and switch Render's Blueprint path back to the existing `render.yaml` only after reviewing the paid resource plan. Do not delete or sync a Blueprint over an existing resource without checking Render's change preview. Application code rollback does not roll back TiDB or Supabase data.
+
+The Oracle deployment package remains preserved in local Git stash `Preserve Oracle deployment package before Render switch`; Oracle branch ref `deployment/oracle-free` remains at `30a8032`. Restore the Oracle worktree files with `git stash apply stash@{0}` while on `deployment/oracle-free` (do not drop the stash until verified).
+
+## References
+
+- [Render Free services and limits](https://render.com/docs/free)
+- [Render compute plan RAM](https://render.com/docs/compute-plans)
+- [Render free-service behavior](https://render.com/docs/faq)
+- [TiDB Cloud Starter tiers and quotas](https://docs.pingcap.com/tidbcloud/select-cluster-tier/)
+- [TiDB Starter TLS connection requirements](https://docs.pingcap.com/tidbcloud/secure-connections-to-serverless-clusters/)
+- [Supabase plan quotas](https://supabase.com/pricing)
+- [Supabase free project pausing](https://supabase.com/docs/guides/platform/free-project-pausing)
+- [Supabase private buckets and access model](https://supabase.com/docs/guides/storage/buckets/fundamentals)
+- [Vercel Hobby plan](https://vercel.com/docs/plans/hobby)
+- [Vercel Blob Hobby included use](https://vercel.com/docs/vercel-blob/usage-and-pricing)

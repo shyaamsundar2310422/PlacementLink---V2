@@ -55,6 +55,10 @@ class Config:
 
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
     UPLOAD_FOLDER = os.path.abspath(os.getenv('UPLOAD_FOLDER') or os.path.join(BASE_DIR, 'static/uploads'))
+    FILE_STORAGE_BACKEND = os.getenv('FILE_STORAGE_BACKEND', 'local').strip().lower()
+    SUPABASE_URL = os.getenv('SUPABASE_URL', '').strip().rstrip('/')
+    SUPABASE_STORAGE_BUCKET = os.getenv('SUPABASE_STORAGE_BUCKET', '').strip()
+    SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '').strip()
     MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', str(16 * 1024 * 1024)))
     SESSION_COOKIE_SECURE = APP_ENV == 'production'
     SESSION_COOKIE_HTTPONLY = True

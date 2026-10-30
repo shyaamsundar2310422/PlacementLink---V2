@@ -16,6 +16,7 @@ from ml.resume_parser import extract_resume_text
 from ml.embedding_service import generate_embedding, embedding_to_json, json_to_embedding
 from ml.semantic_matcher import build_job_text
 from config import Config
+from services.file_storage import store_bytes
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 logger = logging.getLogger(__name__)
@@ -175,10 +176,7 @@ def jobs():
                 if not extracted_jd:
                     flash('No selectable text was found in the job description. Upload a text-based PDF or DOCX.', 'danger')
                     return redirect('/admin/jobs')
-                os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
                 saved_filename = f"jd_{uuid4().hex}{extension}"
-                saved_path = Path(Config.UPLOAD_FOLDER) / saved_filename
-                saved_path.write_bytes(jd_bytes)
                 jd_file_url = f"/static/uploads/{saved_filename}"
                 jd_text = extracted_jd
             except Exception as error:
@@ -206,14 +204,11 @@ def jobs():
                 len(vector), len(job_text),
             )
         except Exception as error:
-            try:
-                os.remove(saved_path)
-            except OSError:
-                pass
             flash(f'Job embedding could not be generated ({type(error).__name__}). No job was posted.', 'danger')
             return redirect('/admin/jobs')
 
         try:
+            store_bytes(saved_filename, jd_bytes, jd_file.mimetype)
             job_id = create_job(
                 company_id, title, role, location, ctc, eligibility_criteria,
                 required_skills, allowed_departments, max_backlogs, min_cgpa,
@@ -222,10 +217,6 @@ def jobs():
             )
         except Exception as error:
             logger.exception("semantic_pipeline stage=jd_database_storage_failed")
-            try:
-                os.remove(saved_path)
-            except OSError:
-                pass
             flash(f'Job description could not be saved ({type(error).__name__}). No job was posted.', 'danger')
             return redirect('/admin/jobs')
         flash(f'Job {job_id} posted with its JD file, extracted text, and semantic embedding.', 'success')
@@ -268,11 +259,9 @@ def replace_job_description(job_id):
         embedding_json = embedding_to_json(vector, source_text=job_text)
         if json_to_embedding(embedding_json) is None:
             raise ValueError('The generated job description embedding is invalid.')
-        os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
         saved_filename = f"jd_{uuid4().hex}{extension}"
-        saved_path = Path(Config.UPLOAD_FOLDER) / saved_filename
-        saved_path.write_bytes(jd_bytes)
         file_url = f"/static/uploads/{saved_filename}"
+        store_bytes(saved_filename, jd_bytes, jd_file.mimetype)
         update_job_description(job_id, extracted_jd, file_url, embedding_json)
         logger.info(
             "semantic_pipeline stage=jd_replacement_stored job_id=%s text_chars=%d dimensions=%d",
@@ -281,11 +270,6 @@ def replace_job_description(job_id):
         flash(f'Job description and semantic embedding updated for job {job_id}.', 'success')
     except Exception as error:
         logger.exception("semantic_pipeline stage=jd_replacement_failed job_id=%s", job_id)
-        try:
-            if 'saved_path' in locals():
-                os.remove(saved_path)
-        except OSError:
-            pass
         flash(f'Job description could not be processed ({type(error).__name__}). The existing posting was not changed.', 'danger')
     return redirect('/admin/jobs')
 

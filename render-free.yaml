@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: placementlink-backend-free
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 1 --timeout 180 --graceful-timeout 30 --access-logfile - --error-logfile - "app:create_app()"
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL_CA
+        sync: false
+      - key: DB_SSL_MODE
+        value: verify_identity
+      - key: FILE_STORAGE_BACKEND
+        value: supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: placementlink-documents
+      - key: UPLOAD_FOLDER
+        value: /tmp/placementlink-staging
+      - key: HF_HOME
+        value: /tmp/huggingface
+      - key: HF_HUB_OFFLINE
+        value: "0"
+      - key: TRANSFORMERS_OFFLINE
+        value: "0"
+      - key: OLLAMA_URL
+        value: ""
