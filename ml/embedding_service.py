@@ -19,9 +19,10 @@ def _get_model():
                 raise RuntimeError("SentenceTransformer model is unavailable") from _model_load_error
             if _model is None:
                 try:
-                    # Prefer the installed model; do not retry Hub downloads per job.
-                    os.environ.setdefault("HF_HUB_OFFLINE", "1")
-                    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+                    # Download once on first use when absent; Hugging Face caches the model
+                    # under HF_HOME so a persistent deployment disk can reuse it.
+                    os.environ.setdefault("HF_HUB_OFFLINE", "0")
+                    os.environ.setdefault("TRANSFORMERS_OFFLINE", "0")
                     from sentence_transformers import SentenceTransformer
 
                     _model = SentenceTransformer(_MODEL_NAME)

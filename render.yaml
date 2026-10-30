@@ -1,0 +1,48 @@
+services:
+  - type: web
+    name: placementlink-backend
+    runtime: python
+    plan: 1c-2g
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 180 --graceful-timeout 30 --access-logfile - --error-logfile - "app:create_app()"
+    healthCheckPath: /healthz
+    disk:
+      name: placementlink-data
+      mountPath: /var/data
+      sizeGB: 2
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL_CA
+        sync: false
+      - key: DB_SSL_MODE
+        value: disabled
+      - key: UPLOAD_FOLDER
+        value: /var/data/uploads
+      - key: HF_HOME
+        value: /var/data/huggingface
+      - key: HF_HUB_OFFLINE
+        value: "0"
+      - key: TRANSFORMERS_OFFLINE
+        value: "0"
+      - key: OLLAMA_URL
+        sync: false
+      - key: OLLAMA_MODEL
+        value: gemma3:4b
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_USE_TLS
+        value: "true"
+      - key: MAIL_FROM
+        sync: false

@@ -1,10 +1,14 @@
-from flask import Flask, render_template, session, redirect
+from flask import Flask, render_template, session, redirect, jsonify, send_from_directory, abort
 import os
 from extensions import mail
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object('config.Config')
+    if app.config.get('APP_ENV') == 'production' and app.config.get('SECRET_KEY') == 'default-secret-key':
+        raise RuntimeError('Set a unique SECRET_KEY before starting PlacementLink in production.')
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # Flask-Mail uses the same environment-based values as utils.email_utils.
     app.config['MAIL_SERVER'] = app.config.get('SMTP_HOST')
@@ -77,12 +81,87 @@ def create_app():
 
         return redirect('/auth/login')
 
+    @app.get('/healthz')
+    def health_check():
+        return jsonify(status='ok'), 200
+
+    @app.get('/readyz')
+    def readiness_check():
+        from database.db import get_db_connection
+        connection = None
+        try:
+            connection = get_db_connection()
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT 1')
+                cursor.fetchone()
+            return jsonify(status='ready', database='ok'), 200
+        except Exception:
+            app.logger.exception('readiness_check_failed')
+            return jsonify(status='not_ready', database='unavailable'), 503
+        finally:
+            if connection is not None:
+                connection.close()
+
+    @app.get('/static/uploads/<path:filename>')
+    def uploaded_file(filename):
+        user_id = session.get('user_id')
+        role = session.get('role')
+        if not user_id or role not in {'student', 'mentor', 'admin'}:
+            return redirect('/auth/login')
+
+        if role != 'admin':
+            from database.db import get_db_connection
+            file_url = f'/static/uploads/{filename}'
+            connection = get_db_connection()
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT s.user_id AS student_user_id, m.user_id AS mentor_user_id
+                        FROM documents d
+                        JOIN students s ON d.student_id = s.id
+                        LEFT JOIN mentors m ON s.mentor_id = m.id
+                        WHERE d.file_path = %s
+                        UNION
+                        SELECT s.user_id AS student_user_id, m.user_id AS mentor_user_id
+                        FROM student_profiles p
+                        JOIN students s ON p.student_id = s.id
+                        LEFT JOIN mentors m ON s.mentor_id = m.id
+                        WHERE p.resume_url = %s
+                        """,
+                        (file_url, file_url),
+                    )
+                    student_documents = cursor.fetchall()
+                    is_job_description = False
+                    if not student_documents:
+                        cursor.execute('SELECT id FROM jobs WHERE jd_file_url = %s', (file_url,))
+                        is_job_description = bool(cursor.fetchone())
+            finally:
+                connection.close()
+
+            if is_job_description:
+                pass
+            elif role == 'student' and any(
+                int(document['student_user_id']) == int(user_id)
+                for document in (student_documents or [])
+            ):
+                pass
+            elif role == 'mentor' and any(
+                document.get('mentor_user_id') is not None
+                and int(document['mentor_user_id']) == int(user_id)
+                for document in (student_documents or [])
+            ):
+                pass
+            else:
+                abort(404)
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
     return app
 
 
 if __name__ == '__main__':
     app = create_app()
     app.run(
-        debug=True,
+        debug=app.config.get('APP_ENV') != 'production',
         use_reloader=False
     )
