@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+<div class="card shadow border-0">
+
+<div class="card-body">
+
+<h2>
+
+🏢 Closest Companies
+
+</h2>
+
+<p class="text-muted">
+
+Companies that best match your current profile.
+
+</p>
+
+<hr>
+
+{% if companies %}
+
+<table class="table table-hover">
+
+<thead>
+
+<tr>
+
+<th>Company</th>
+
+<th>Role</th>
+
+<th>Match</th>
+
+<th>AI Insight</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for job in companies %}
+
+<tr>
+
+<td>
+
+<strong>
+
+{{ job.company_name }}
+
+</strong>
+<div class="small text-muted">{{ job.job_count }} active {% if job.job_count == 1 %}opportunity{% else %}opportunities{% endif %}</div>
+
+</td>
+
+<td>
+
+{{ job.title }}
+
+</td>
+
+<td>
+
+<span class="badge bg-success">
+
+{{ job.match_score }}%
+
+</span>
+
+</td>
+
+<td>
+
+{% if job.match_reasons %}
+
+{{ job.match_reasons.values()|list|join(", ") }}
+
+{% else %}
+
+Good overall profile match.
+
+{% endif %}
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+{% else %}
+
+<div class="alert alert-warning">
+
+No company recommendations available.
+
+</div>
+
+{% endif %}
+
+</div>
+
+</div>
+
+</div>
+
+{% endblock %}

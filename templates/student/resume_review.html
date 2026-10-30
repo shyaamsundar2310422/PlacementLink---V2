@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+<div class="card shadow-lg border-0">
+
+<div class="card-body">
+
+<h2>
+
+🤖 AI Resume Review
+
+</h2>
+
+<hr>
+
+{% if warning %}
+<div class="alert alert-warning">
+    {{ warning }}
+</div>
+{% endif %}
+
+{% if review %}
+    {% if review.analysis_source == 'local_fallback' %}
+    <div class="alert alert-secondary">
+        Local heuristic analysis shown; live AI analysis was unavailable or returned incomplete output.
+    </div>
+    {% endif %}
+    {% if review.service_warning %}
+    <div class="alert alert-warning">
+        {{ review.service_warning }}
+    </div>
+    {% endif %}
+
+    <div class="mb-3">
+        <strong>Overall Score:</strong> {{ review.overall_score }}
+    </div>
+    <div class="mb-3">
+        <strong>ATS Score:</strong> {{ review.ats_score }}%
+    </div>
+    <div class="mb-3">
+        <strong>Estimated Score:</strong> {{ review.estimated_score }}
+    </div>
+    <div class="mb-3">
+        <strong>Recruiter Impression:</strong>
+        <p>{{ review.recruiter_impression }}</p>
+    </div>
+
+    <div class="mb-3">
+        <strong>Skills</strong>
+        <p>{{ review.skills_feedback|join(' ') }}</p>
+    </div>
+
+    <div class="mb-3">
+        <strong>Projects</strong>
+        <p>{{ review.projects_feedback|join(' ') }}</p>
+    </div>
+
+    <div class="mb-3">
+        <strong>Experience</strong>
+        <ul>
+            {% for item in review.experience %}
+            <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="mb-3">
+        <strong>Strengths</strong>
+        <ul>
+            {% for item in review.strengths %}
+            <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="mb-3">
+        <strong>Weaknesses</strong>
+        <ul>
+            {% for item in review.weaknesses %}
+            <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="mb-3">
+        <strong>Suggestions</strong>
+        <ul>
+            {% for item in review.suggestions %}
+            <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+{% else %}
+<div class="alert alert-secondary">
+    No AI resume review is available yet. Please upload your resume or try again later.
+</div>
+{% endif %}
+
+</div>
+
+</div>
+
+</div>
+
+{% endblock %}

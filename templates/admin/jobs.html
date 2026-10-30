@@ -15,7 +15,7 @@
 
     <div id="addJobForm" style="display: none; background: var(--surface-light); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; border: 1px solid var(--glass-border);">
         <h3 style="margin-bottom: 1rem;">Post New Job Opportunity</h3>
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
             <div class="form-row">
                 <div class="form-group">
                     <label>Company</label>
@@ -90,6 +90,12 @@
                 <textarea name="required_skills" class="form-control" rows="2" placeholder="e.g. Python, Django, React, AWS"></textarea>
             </div>
 
+            <div class="form-group">
+                <label for="job-description-file">Job Description (PDF or DOCX)</label>
+                <input id="job-description-file" type="file" name="job_description_file" class="form-control" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required>
+                <small class="text-muted">Required. The PDF/DOCX is saved with the job; extracted text is stored and embedded for semantic matching. Scanned PDFs are not supported.</small>
+            </div>
+
             <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
                 <button type="button" class="btn btn-danger" onclick="document.getElementById('addJobForm').style.display='none'">Cancel</button>
                 <button type="submit" class="btn btn-primary">Publish Job Posting</button>
@@ -107,6 +113,7 @@
                     <th>CTC</th>
                     <th>Deadline</th>
                     <th>Eligibility</th>
+                    <th>Job Description</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -128,6 +135,13 @@
                         <span class="badge" style="background: rgba(255,255,255,0.1);">Backlogs: &le;{{ job.max_backlogs }}</span>
                     </td>
                     <td>
+                        {% if job.jd_file_url %}<a href="{{ job.jd_file_url }}" target="_blank" rel="noopener">View JD</a>{% else %}<span class="text-muted">No uploaded file</span>{% endif %}
+                        <form action="/admin/job/{{ job.id }}/description" method="POST" enctype="multipart/form-data" style="margin-top: 0.5rem;">
+                            <input type="file" name="job_description_file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required aria-label="Upload or replace job description">
+                            <button type="submit" class="btn btn-accent" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Upload / Replace JD</button>
+                        </form>
+                    </td>
+                    <td>
                         <a href="/admin/job/{{ job.id }}/applications" class="btn btn-accent" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
                             <i class="fas fa-users"></i> Applicants
                         </a>
@@ -135,7 +149,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="7" style="text-align: center; padding: 2rem;">No jobs posted yet.</td>
+                    <td colspan="8" style="text-align: center; padding: 2rem;">No jobs posted yet.</td>
                 </tr>
                 {% endfor %}
             </tbody>

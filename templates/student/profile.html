@@ -6,6 +6,24 @@
     <div class="card glassmorphism">
         <h2 style="font-size: 1.8rem;"><i class="fas fa-user-circle text-gradient"></i> Digital Profile</h2>
         <p class="text-muted" style="margin-bottom: 2rem;">Notice: Any update requests must be approved by your mentor before reflecting in the system.</p>
+
+        <section class="card" style="background: var(--surface-light); margin-bottom: 1.5rem;" aria-labelledby="resume-upload-heading">
+            <h3 id="resume-upload-heading"><i class="fas fa-file-upload text-primary"></i> Resume Upload / Replace</h3>
+            {% if profile.resume_url %}
+            <p class="text-muted">Current resume: <a href="{{ profile.resume_url }}" target="_blank" rel="noopener">{{ resume_filename or 'View uploaded resume' }}</a></p>
+            {% else %}
+            <p class="text-muted">No resume uploaded yet. Upload a text-based PDF or DOCX to enable semantic job matching.</p>
+            {% endif %}
+            <form action="/student/upload_document" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="doc_type" value="Resume">
+                <div class="form-group">
+                    <label for="profile-resume-file">Choose resume (PDF or DOCX)</label>
+                    <input id="profile-resume-file" type="file" name="document_file" class="form-control" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required>
+                    <small class="text-muted">Uploading a new file replaces the resume used for matching. Text extraction and embedding generation run after upload.</small>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Upload / Replace Resume</button>
+            </form>
+        </section>
         
         <form method="POST">
             <div class="form-row">

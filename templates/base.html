@@ -29,6 +29,7 @@
                 {% if session.get('role') == 'student' %}
                     <a href="/student/dashboard" class="nav-link {% if request.path == '/student/dashboard' %}active{% endif %}"><i class="fas fa-home"></i> Dashboard</a>
                     <a href="/student/jobs" class="nav-link {% if request.path.startswith('/student/jobs') %}active{% endif %}"><i class="fas fa-briefcase"></i> Opportunities</a>
+                    <a href="/student/placement-agent" class="nav-link {% if request.path == '/student/placement-agent' %}active{% endif %}"><i class="fas fa-rocket"></i> Placement Intelligence</a>
                     <a href="/student/applications" class="nav-link {% if request.path.startswith('/student/applications') %}active{% endif %}"><i class="fas fa-file-alt"></i> Applications</a>
                     <a href="/student/resources" class="nav-link {% if request.path.startswith('/student/resources') %}active{% endif %}"><i class="fas fa-book"></i> Resources</a>
                     <a href="/student/feedback" class="nav-link {% if request.path.startswith('/student/feedback') %}active{% endif %}"><i class="fas fa-comment"></i> Feedback</a>

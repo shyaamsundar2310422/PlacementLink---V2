@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+<div class="card shadow">
+
+<div class="card-body">
+
+<h2>
+
+🔮 What If Analysis
+
+</h2>
+
+<hr>
+
+{% if result %}
+
+<div class="row">
+
+<div class="col-md-6">
+
+<div class="card p-3">
+
+<h4>
+
+Highest Current Job Match (Estimate)
+
+</h4>
+
+<h1>
+
+{{ result.current_score }}%
+
+</h1>
+
+</div>
+
+</div>
+
+<div class="col-md-6">
+
+<div class="card p-3 bg-success text-white">
+
+<h4>
+
+Highest Match After Adding This Skill (Estimate)
+
+{{ result.skill }}
+
+</h4>
+
+<h1>
+
+{{ result.predicted_score }}%
+
+</h1>
+
+</div>
+
+</div>
+
+</div>
+
+<hr>
+
+<h4>
+
+🚀 Jobs Crossing the Match Threshold
+
+</h4>
+
+<div class="display-4 text-primary">
+
++{{ result.unlocks }}
+
+</div>
+
+<div class="alert alert-info mt-4">
+
+Learning
+
+<b>
+
+{{ result.skill }}
+
+</b>
+
+is estimated to affect {{ result.affected_jobs }} job(s), with {{ result.unlocks }} crossing the current {{ result.threshold }}% match threshold. These scores are estimates, not guarantees.
+
+</div>
+
+{% else %}
+
+<div class="alert alert-success">
+
+No current job skill gaps are available to model. Check again when relevant openings are available.
+
+</div>
+
+{% endif %}
+
+</div>
+
+</div>
+
+</div>
+
+{% endblock %}

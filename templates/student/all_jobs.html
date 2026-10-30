@@ -5,7 +5,7 @@
 <div class="dashboard-header" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
     <div>
         <h2><i class="fas fa-globe text-gradient"></i> All Job Opportunities</h2>
-        <p class="text-muted">Showing all active openings with your profile-to-JD match score for each role.</p>
+        <p class="text-muted">Active jobs are ranked by cosine similarity between your saved resume/profile and each job description (mapped from -1–1 to 0–100). The final score combines 70% hard-rule matching and 30% semantic similarity.</p>
     </div>
     <div style="display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center;">
         <a href="/student/jobs?sort={{ selected_sort }}" class="btn" style="background: var(--surface-light); color: var(--text-main);">
@@ -41,14 +41,41 @@
             </p>
             <h3 style="margin: 0.2rem 0; font-size: 1.4rem;">{{ job.title }}</h3>
             <p class="text-muted" style="font-size: 1rem;">{{ job.role }}</p>
+            {% if job.jd_text %}
+            <details style="margin-top: 0.5rem;">
+                <summary style="cursor: pointer; color: var(--primary);">Full job description</summary>
+                <p class="text-muted" style="white-space: pre-wrap; margin-top: 0.5rem;">{{ job.jd_text }}</p>
+            </details>
+            {% endif %}
             <p style="margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <span class="badge" style="background: var(--surface-light); color: var(--text-main);">Profile Match: {{ job.match_score }}%</span>
+                {% if job.semantic_available %}
+                <span class="badge" style="background: var(--surface-light); color: var(--text-main);">Semantic Match: {{ "%.2f"|format(job.semantic_score) }}%</span>
+                <span class="badge" style="background: var(--surface-light); color: var(--text-main);">Hybrid: {{ job.match_score }}%</span>
+                {% else %}
+                <span class="badge badge-warning">Semantic Match unavailable</span>
+                {% endif %}
                 {% if job.is_match %}
                 <span class="badge badge-success">Strict Match</span>
                 {% else %}
                 <span class="badge badge-warning">Not a Strict Match</span>
                 {% endif %}
             </p>
+            {% if not job.semantic_available %}
+            <p class="text-muted" style="font-size: 0.85rem;">{{ job.semantic_diagnostic or "Semantic scoring is unavailable for this job." }}</p>
+            {% else %}
+            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.6rem;">
+                <span class="badge" style="background: var(--surface-light); color: var(--text-main);">Rule {{ job.rule_score }}%</span>
+            </div>
+            {% endif %}
+            {% if job.explainability is defined %}
+            <p class="text-muted" style="font-size: 0.85rem; margin-top: 0.5rem;"><strong>Matched skills:</strong> {{ job.explainability.matched_skills|join(", ") or "None identified" }}</p>
+            <p class="text-muted" style="font-size: 0.85rem;"><strong>Missing skills:</strong> {{ job.explainability.missing_skills|join(", ") or "None identified" }}</p>
+            {% endif %}
+            {% if job.match_gates is defined %}
+            <p class="text-muted" style="font-size: 0.85rem;"><strong>Eligibility:</strong>
+                {% if job.match_gates.academic_gate and job.match_gates.department_gate %}Academic and department criteria met{% else %}Academic or department criteria not met{% endif %}
+            </p>
+            {% endif %}
             {% if job.match_breakdown is defined %}
             <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.6rem;">
                 <span class="badge" style="background: var(--surface-light); color: var(--text-main);">Skills {{ job.match_breakdown.skills }}%</span>

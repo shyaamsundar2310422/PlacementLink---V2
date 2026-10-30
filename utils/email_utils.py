@@ -1,7 +1,10 @@
 import smtplib
+import logging
 from email.message import EmailMessage
 
 from config import Config
+
+logger = logging.getLogger(__name__)
 
 
 def is_email_configured():
@@ -26,7 +29,7 @@ def send_email(recipient, subject, body):
             server.send_message(message)
         return True
     except Exception as exc:
-        print(f"Email send failed: {exc}")
+        logger.warning("email_send_failed category=%s", type(exc).__name__)
         return False
 
 

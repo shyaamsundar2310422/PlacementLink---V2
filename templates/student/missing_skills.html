@@ -1,0 +1,134 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+    <div class="card shadow border-0">
+
+        <div class="card-body">
+
+            <h2 class="mb-3">
+
+                ðŸ“‰ Missing Skills Analysis
+
+            </h2>
+
+            <p class="text-muted">
+
+                These are the skills most frequently missing from your profile
+                across available placement opportunities.
+
+            </p>
+
+            <hr>
+
+            <table class="table table-hover align-middle">
+
+                <thead>
+
+                    <tr>
+
+                        <th>Skill</th>
+
+                        <th>Missing In Jobs</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% if missing_skills %}
+
+                        {% for skill, count in missing_skills %}
+
+                        <tr>
+
+                            <td>
+
+                                <span class="badge bg-primary">
+
+                                    {{ skill }}
+
+                                </span>
+
+                            </td>
+
+                            <td>
+
+                                <span class="badge bg-danger">
+
+                                    {{ count }}
+
+                                </span>
+
+                            </td>
+
+                        </tr>
+
+                        {% endfor %}
+
+                    {% else %}
+
+                        <tr>
+
+                            <td colspan="2" class="text-center text-success">
+
+                                ðŸŽ‰ No missing skills detected!
+
+                            </td>
+
+                        </tr>
+
+                    {% endif %}
+
+                </tbody>
+
+            </table>
+
+            <div class="alert alert-info mt-4">
+
+                <h5>
+
+                    ðŸ’¡ AI Recommendation
+
+                </h5>
+
+                {% if missing_skills %}
+
+                Learning
+
+                <strong>
+
+                    {{ missing_skills[0][0] }}
+
+                </strong>
+
+                will improve your eligibility for the largest number of available jobs.
+
+                {% else %}
+
+                Your profile already satisfies most of the required skills for the available opportunities.
+
+                {% endif %}
+
+            </div>
+
+            <div class="text-center mt-4">
+
+                <a href="/student/placement-agent" class="btn btn-primary">
+
+                    â† Back to Placement Intelligence
+
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

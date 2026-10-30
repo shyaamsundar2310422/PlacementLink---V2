@@ -1,0 +1,964 @@
+{% extends "base.html" %}
+
+{% block title %}Placement Intelligence Agent{% endblock %}
+
+{% block extra_css %}
+<link
+  href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+  rel="stylesheet"
+>
+<link
+  rel="stylesheet"
+  href="{{ url_for('static', filename='css/placement_agent.css') }}"
+>
+<style>
+  .readiness-card {
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+  }
+
+  .readiness-card__header {
+    background: linear-gradient(135deg, #172554, #2563eb 60%, #0ea5e9);
+    color: #fff;
+  }
+
+  .readiness-score-ring {
+    width: 132px;
+    height: 132px;
+    border: 10px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  }
+
+  .readiness-score-ring__value {
+    font-size: 2.4rem;
+    line-height: 1;
+    font-weight: 800;
+  }
+
+  .readiness-progress .progress-bar {
+    animation: readiness-progress 900ms ease-out;
+  }
+
+  .readiness-breakdown-row + .readiness-breakdown-row {
+    border-top: 1px solid var(--bs-border-color);
+  }
+
+  @keyframes readiness-progress {
+    from { width: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .readiness-progress .progress-bar {
+      animation: none;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set recommended_jobs = top_jobs|default([], true) %}
+
+<section class="container py-4">
+  <div class="p-4 p-lg-5 mb-4 rounded-3 bg-body-tertiary border">
+    <div class="row align-items-center g-4">
+      <div class="col-lg-8">
+        <p class="text-uppercase text-primary fw-semibold small mb-2">
+          Placement Intelligence Agent
+        </p>
+        <h1 class="display-6 fw-bold mb-3">Placement Match Dashboard</h1>
+        <p class="lead mb-0">
+          Personalized recommendations based on your resume, skills, projects,
+          academic profile, and active placement openings.
+        </p>
+      </div>
+      <div class="col-lg-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body text-center">
+            <p class="text-muted mb-1">Recommended roles</p>
+            <div class="display-5 fw-bold text-primary">
+              {{ recommended_jobs|length }}
+            </div>
+            <p class="small text-muted mb-0">Updated from your latest profile</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if not recommended_jobs %}
+  <div class="alert alert-warning" role="alert">
+    No eligible recommendations are available for your current profile. Add your skills, projects, CGPA, and department details. A text-based PDF or DOCX resume with a generated embedding enables the semantic part of the match score.
+  </div>
+  {% else %}
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+          <h2 class="h4 fw-bold mb-1">Top Recommended Jobs</h2>
+          <p class="text-muted mb-0">
+            Eligible jobs are ranked by cosine similarity between your saved resume/profile and each job description. The final score combines 70% hard-rule matching and 30% semantic similarity.
+          </p>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        {% for job in recommended_jobs %}
+        {% set match_score = job.match_score|default(0, true)|int %}
+        {% set rule_score = job.rule_score|default(0, true)|int %}
+        {% set semantic_score = job.semantic_score|default(0, true)|float %}
+        {% set modal_id = "jobMatchModal-" ~ (job.id|default(loop.index, true)) %}
+        {% set why_modal_id = "whyNotMeModal-" ~ (job.id|default(loop.index, true)) %}
+
+        <div class="col-12">
+          <article class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+              <div class="d-flex flex-column flex-md-row justify-content-between gap-3">
+                <div>
+                  <p class="text-primary fw-semibold mb-1">
+                    {{ job.company_name|default("Company unavailable", true) }}
+                  </p>
+                  <h3 class="h5 mb-2">
+                    {{ job.title|default("Role unavailable", true) }}
+                  </h3>
+                  <div class="d-flex flex-wrap gap-2">
+                    {% if job.semantic_available %}
+                    <span class="badge text-bg-primary">Semantic Match {{ "%.2f"|format(semantic_score) }}%</span>
+                    {% else %}
+                    <span class="badge text-bg-secondary">Semantic Match unavailable</span>
+                    {% endif %}
+                    <span class="badge text-bg-light">
+                      Rule {{ rule_score }}%
+                    </span>
+                    {% if job.semantic_available %}
+                    <span class="badge text-bg-dark">Hybrid {{ match_score }}%</span>
+                    {% endif %}
+                  </div>
+                </div>
+
+                <div class="text-md-end d-flex flex-wrap justify-content-md-end gap-2">
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#{{ modal_id }}"
+                  >
+                    Explore Match
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-outline-primary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#{{ why_modal_id }}"
+                  >
+                    <i class="fas fa-magnifying-glass-chart me-1" aria-hidden="true"></i>
+                    Why Not Me?
+                  </button>
+                </div>
+              </div>
+              {% if not job.semantic_available %}
+              <p class="small text-muted mt-2 mb-0">{{ job.semantic_diagnostic or "Semantic scoring is unavailable for this job." }}</p>
+              {% endif %}
+              <p class="small text-muted mt-2 mb-0"><strong>Eligibility:</strong>
+                {% if job.match_gates and job.match_gates.academic_gate and job.match_gates.department_gate %}Academic and department criteria met{% else %}Academic or department criteria not met{% endif %}
+              </p>
+
+              <div class="progress mt-3" style="height: 10px;">
+                <div
+                  class="progress-bar"
+                  role="progressbar"
+                  style="width: {{ match_score }}%;"
+                  aria-valuenow="{{ match_score }}"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                ></div>
+              </div>
+
+              <div class="row g-3 mt-2">
+                {% if job.explainability %}
+                <div class="col-md-6">
+                  <div class="border rounded-3 p-3 h-100">
+                    <h4 class="h6 fw-bold mb-2">Matched Skills</h4>
+                    {% if job.explainability.matched_skills %}
+                    <div class="d-flex flex-wrap gap-2">
+                      {% for skill in job.explainability.matched_skills %}
+                      <span class="badge text-bg-success">{{ skill }}</span>
+                      {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted small mb-0">No matched skills found.</p>
+                    {% endif %}
+                  </div>
+                </div>
+
+                <div class="col-md-6">
+                  <div class="border rounded-3 p-3 h-100">
+                    <h4 class="h6 fw-bold mb-2">Missing Skills</h4>
+                    {% if job.explainability.missing_skills %}
+                    <div class="d-flex flex-wrap gap-2">
+                      {% for skill in job.explainability.missing_skills %}
+                      <span class="badge text-bg-warning">{{ skill }}</span>
+                      {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted small mb-0">No missing skills found.</p>
+                    {% endif %}
+                  </div>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div
+          class="modal fade"
+          id="{{ modal_id }}"
+          tabindex="-1"
+          aria-labelledby="{{ modal_id }}Label"
+          aria-hidden="true"
+        >
+          <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+              <div class="modal-header">
+                <div>
+                  <p class="text-primary fw-semibold mb-1">
+                    {{ job.company_name|default("Company unavailable", true) }}
+                  </p>
+                  <h2 class="modal-title h5" id="{{ modal_id }}Label">
+                    {{ job.title|default("Role unavailable", true) }} Match Report
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  class="btn-close"
+                  data-bs-dismiss="modal"
+                  aria-label="Close"
+                ></button>
+              </div>
+
+              <div class="modal-body">
+                <div class="row g-3 mb-4">
+                  <div class="col-md-4">
+                    <div class="border rounded-3 p-3 h-100">
+                      <p class="text-muted mb-1">Hybrid Score</p>
+                      <div class="h2 fw-bold mb-2">{{ match_score }}%</div>
+                      <div class="progress" style="height: 10px;">
+                        <div
+                          class="progress-bar"
+                          role="progressbar"
+                          style="width: {{ match_score }}%;"
+                          aria-valuenow="{{ match_score }}"
+                          aria-valuemin="0"
+                          aria-valuemax="100"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="border rounded-3 p-3 h-100">
+                      <p class="text-muted mb-1">Rule Score</p>
+                      <div class="h2 fw-bold mb-0">{{ rule_score }}%</div>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="border rounded-3 p-3 h-100">
+                      <p class="text-muted mb-1">Semantic Score</p>
+                      <div class="h2 fw-bold mb-0">
+                        {% if job.semantic_available %}
+                        {{ "%.2f"|format(semantic_score) }}%
+                        {% else %}
+                        Unavailable
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row g-3">
+                  <div class="col-lg-6">
+                    <div class="card h-100">
+                      <div class="card-body">
+                        <h3 class="h5 mb-3">Skill Analysis</h3>
+                        {% if job.explainability %}
+                        <h4 class="h6">Matched Skills</h4>
+                        {% if job.explainability.matched_skills %}
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                          {% for skill in job.explainability.matched_skills %}
+                          <span class="badge text-bg-success">{{ skill }}</span>
+                          {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted small">No matched skills found.</p>
+                        {% endif %}
+
+                        <h4 class="h6">Missing Skills</h4>
+                        {% if job.explainability.missing_skills %}
+                        <div class="d-flex flex-wrap gap-2">
+                          {% for skill in job.explainability.missing_skills %}
+                          <span class="badge text-bg-warning">{{ skill }}</span>
+                          {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted small mb-0">No missing skills found.</p>
+                        {% endif %}
+                        {% else %}
+                        <p class="text-muted mb-0">
+                          Skill explainability is not available for this role.
+                        </p>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-lg-6">
+                    <div class="card h-100">
+                      <div class="card-body">
+                        <h3 class="h5 mb-3">Match Breakdown</h3>
+                        {% if job.match_breakdown %}
+                        <div class="vstack gap-3">
+                          {% for label, value in job.match_breakdown.items() %}
+                          {% set breakdown_score = value|default(0, true)|int %}
+                          <div>
+                            <div class="d-flex justify-content-between mb-1">
+                              <span class="text-capitalize">{{ label|replace("_", " ") }}</span>
+                              <span class="fw-semibold">{{ breakdown_score }}%</span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                              <div
+                                class="progress-bar bg-info"
+                                role="progressbar"
+                                style="width: {{ breakdown_score }}%;"
+                                aria-valuenow="{{ breakdown_score }}"
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                              ></div>
+                            </div>
+                          </div>
+                          {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">
+                          Breakdown is not available for this role.
+                        </p>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="alert alert-info mt-4 mb-0" role="alert">
+                  <h3 class="h5">AI Explanation</h3>
+                  {% if job.match_reasons %}
+                  <ul class="mb-0">
+                    {% for label, reason in job.match_reasons.items() %}
+                    <li>
+                      <strong class="text-capitalize">{{ label|replace("_", " ") }}:</strong>
+                      {{ reason }}
+                    </li>
+                    {% endfor %}
+                  </ul>
+                  {% else %}
+                  <p class="mb-0">No explanation is available for this role.</p>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="modal-footer">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  data-bs-dismiss="modal"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="modal fade"
+          id="{{ why_modal_id }}"
+          tabindex="-1"
+          aria-labelledby="{{ why_modal_id }}Label"
+          aria-hidden="true"
+        >
+          <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+              <div class="modal-header">
+                <div>
+                  <p class="text-primary fw-semibold mb-1">Resume vs Job Explainability</p>
+                  <h2 class="modal-title h5" id="{{ why_modal_id }}Label">
+                    Resume vs {{ job.company_name|default("Company", true) }}
+                    {{ job.title|default("Role", true) }}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  class="btn-close"
+                  data-bs-dismiss="modal"
+                  aria-label="Close"
+                ></button>
+              </div>
+
+              <div class="modal-body">
+                {% set gap = job.why_not_me|default({}, true) %}
+                <div class="card bg-primary text-white border-0 mb-4">
+
+                <div class="card-body text-center">
+
+                    <h5>🎯 Current Match Score</h5>
+
+                    <h1 class="display-3 fw-bold">
+
+                        {{ gap.current_score|default(match_score, true) }}%
+
+                    </h1>
+
+                    <div class="progress mt-3" style="height:12px;">
+
+                        <div
+                            class="progress-bar bg-success"
+                            style="width: {{ gap.current_score|default(match_score, true) }}%;">
+
+                        </div>
+
+                    </div>
+
+                    <p class="mt-3 mb-0">
+
+                        AI Resume vs Job Explainability
+
+                    </p>
+
+                </div>
+
+            </div>
+                <div class="row g-3 mb-4">
+                  <div class="col-md-6">
+                    <section class="border rounded-3 p-3 h-100">
+                      <h3 class="h6 fw-bold text-success mb-3">
+                        <i class="fas fa-circle-check me-2" aria-hidden="true"></i>
+                        Skills You Match
+                      </h3>
+                      {% if gap.matched_skills %}
+                      <div class="d-flex flex-wrap gap-2">
+                        {% for skill in gap.matched_skills %}
+                        <span class="badge text-bg-success">{{ skill }}</span>
+                        {% endfor %}
+                      </div>
+                      {% else %}
+                      <p class="text-muted small mb-0">No matched skills were detected.</p>
+                      {% endif %}
+                    </section>
+                  </div>
+
+                  <div class="col-md-6">
+                    <section class="border rounded-3 p-3 h-100">
+                      <h3 class="h6 fw-bold text-danger mb-3">
+                        <i class="fas fa-circle-xmark me-2" aria-hidden="true"></i>
+                        Skills to Add
+                      </h3>
+                      {% if gap.missing_skills %}
+                      <div class="d-flex flex-wrap gap-2">
+                        {% for skill in gap.missing_skills %}
+                        <span class="badge text-bg-danger">{{ skill }}</span>
+                        {% endfor %}
+                      </div>
+                      {% else %}
+                      <p class="text-muted small mb-0">No required skill gaps were detected.</p>
+                      {% endif %}
+                    </section>
+                  </div>
+                </div>
+
+                <section class="border rounded-3 p-3 mb-4">
+                  <h3 class="h6 fw-bold mb-3">Projected Match Improvement</h3>
+                  <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                    <span>Current Match</span>
+                    <span class="badge text-bg-secondary">{{ gap.current_score|default(match_score, true) }}%</span>
+                  </div>
+                  {% for scenario in gap.scenarios|default([], true) %}
+                  <div class="card border-success mb-2">
+
+                      <div class="card-body d-flex justify-content-between align-items-center">
+
+                          <span>
+
+                              🚀 Learn
+
+                              <strong>
+
+                                  {{ scenario.skills|join(" + ") }}
+
+                              </strong>
+
+                          </span>
+
+                          <span class="badge bg-success fs-6">
+
+                              {{ scenario.score }}%
+
+                          </span>
+
+                      </div>
+
+                  </div>
+                  {% endfor %}
+                </section>
+
+                <div class="alert alert-info mb-0" role="status">
+                  <h3 class="h6 fw-bold">
+                    <i class="fas fa-robot me-2" aria-hidden="true"></i>
+                    AI Recommendation
+                  </h3>
+                  <p class="mb-0">
+                    {{ gap.recommendation|default("Keep strengthening role-relevant projects and interview readiness.", true) }}
+                  </p>
+                </div>
+                <div class="card border-warning mt-3">
+
+                <div class="card-body">
+
+                    <h5 class="fw-bold mb-3">
+                        🎯 30-Day Action Plan
+                    </h5>
+
+                    <ol class="mb-0">
+
+                        <li>Learn your top missing skill.</li>
+
+                        <li>Build one project using that skill.</li>
+
+                        <li>Update your Resume and GitHub.</li>
+
+                        <li>Practice mock interviews for this role.</li>
+
+                    </ol>
+
+                </div>
+
+            </div>
+                <div class="card bg-light border-success mt-3">
+
+                <div class="card-body text-center">
+
+                    <h5>
+
+                        🏆 Estimated Future Match
+
+                    </h5>
+
+                    <h1 class="display-4 text-success">
+
+                        {% if gap.scenarios %}
+
+                            {{ gap.scenarios[-1].score }}%
+
+                        {% else %}
+
+                            {{ gap.current_score|default(match_score, true) }}%
+
+                        {% endif %}
+
+                    </h1>
+
+                    <p class="mb-0 text-muted">
+
+                        Expected match after completing the recommended skills.
+
+                    </p>
+
+                </div>
+
+            </div>
+              </div>
+
+              <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <aside class="col-lg-4">
+
+    <!-- Placement Readiness -->
+
+    {% set readiness_score = readiness.score|default(0, true)|int %}
+    {% set readiness_limits = {
+        "Resume": 20,
+        "Skills": 25,
+        "Projects": 20,
+        "Certifications": 10,
+        "Job Match": 15,
+        "Profile": 10
+    } %}
+    {% set readiness_icons = {
+        "Resume": "fa-file-lines",
+        "Skills": "fa-screwdriver-wrench",
+        "Projects": "fa-rocket",
+        "Certifications": "fa-trophy",
+        "Job Match": "fa-briefcase",
+        "Profile": "fa-user"
+    } %}
+
+    <section class="card readiness-card border-0 mb-4" aria-labelledby="readiness-title">
+        <div class="readiness-card__header p-4 text-center">
+            <h2 id="readiness-title" class="h4 fw-bold mb-4">
+                <i class="fas fa-bullseye me-2" aria-hidden="true"></i>
+                Placement Readiness
+            </h2>
+
+            <div class="readiness-score-ring" aria-label="Readiness score {{ readiness.score|default(0, true) }} percent">
+                <span class="readiness-score-ring__value">
+                    {{ readiness.score|default(0, true) }}%
+                </span>
+            </div>
+
+            <div class="mt-3">
+                {% if readiness_score >= 80 %}
+                <span class="badge rounded-pill text-bg-success px-3 py-2">
+                    {{ readiness.status|default("Placement Ready", true) }}
+                </span>
+                {% elif readiness_score >= 60 %}
+                <span class="badge rounded-pill text-bg-warning px-3 py-2">
+                    {{ readiness.status|default("Almost Ready", true) }}
+                </span>
+                {% else %}
+                <span class="badge rounded-pill text-bg-danger px-3 py-2">
+                    {{ readiness.status|default("Needs Improvement", true) }}
+                </span>
+                {% endif %}
+            </div>
+
+            <p class="small mt-3 mb-0 text-white-50">
+                Readiness estimate based on profile completeness and current job-match data.
+            </p>
+        </div>
+
+        <div class="card-body p-4">
+            <div class="progress readiness-progress mb-4" style="height: 10px;">
+                <div
+                    class="progress-bar progress-bar-striped progress-bar-animated {% if readiness_score >= 80 %}bg-success{% elif readiness_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}"
+                    role="progressbar"
+                    style="width: {{ readiness.score|default(0, true) }}%;"
+                    aria-valuenow="{{ readiness.score|default(0, true) }}"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                ></div>
+            </div>
+
+            <h3 class="h6 fw-bold text-uppercase text-muted mb-2">
+                Score Breakdown
+            </h3>
+
+            {% if readiness.breakdown %}
+            <div class="mb-4">
+                {% for key, value in readiness.breakdown.items() %}
+                <div class="readiness-breakdown-row d-flex align-items-center justify-content-between py-2">
+                    <span class="d-flex align-items-center gap-2">
+                        <i
+                            class="fas {{ readiness_icons.get(key, 'fa-chart-simple') }} text-primary"
+                            aria-hidden="true"
+                        ></i>
+                        <span>{{ key }}</span>
+                    </span>
+                    <span class="fw-semibold">
+                        {{ value }}/{{ readiness_limits.get(key, 100) }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted small mb-4">Readiness details are not available yet.</p>
+            {% endif %}
+
+            <p class="text-muted small">This readiness score uses a heuristic rubric based on profile completeness and current job matches; it is not a validated prediction.</p>
+
+            <div class="alert alert-primary border-0 mb-0" role="status">
+                <h3 class="h6 fw-bold mb-2">
+                    <i class="fas fa-lightbulb me-2" aria-hidden="true"></i>
+                    AI Recommendation
+                </h3>
+                <p class="small mb-0">
+                    {% if readiness_score >= 85 %}
+                    Excellent profile. Focus on interview preparation.
+                    {% elif readiness_score >= 70 %}
+                    Improve missing skills and certifications to maximize opportunities.
+                    {% else %}
+                    Complete your resume, projects, and core technical skills to improve placement readiness.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Placement Intelligence -->
+
+    <div class="card shadow-sm border-0 mb-4">
+
+        <div class="card-body">
+
+            <h2 class="h4 fw-bold mb-3">
+
+                Placement Intelligence
+
+            </h2>
+
+            <div class="row g-3">
+
+                <div class="col-6">
+
+                    <a href="/student/missing-skills" class="text-decoration-none text-dark">
+
+                        <div class="border rounded-3 p-3 text-center h-100">
+
+                            📉<br>
+
+                            <strong>Missing Skills</strong>
+
+                        </div>
+
+                    </a>
+
+                </div>
+
+                <div class="col-6">
+
+                    <a href="/student/learn-next" class="text-decoration-none text-dark">
+
+                        <div class="border rounded-3 p-3 text-center h-100">
+
+                            📚<br>
+
+                            <strong>Learn Next</strong>
+
+                        </div>
+
+                    </a>
+
+                </div>
+
+                <div class="col-6">
+
+                    <a href="/student/closest-companies" class="text-decoration-none text-dark">
+
+                        <div class="border rounded-3 p-3 text-center h-100">
+
+                            🏢<br>
+
+                            <strong>Closest Companies</strong>
+
+                        </div>
+
+                    </a>
+
+                </div>
+
+                <div class="col-6">
+
+                    <a href="/student/what-if" class="text-decoration-none text-dark">
+
+                        <div class="border rounded-3 p-3 text-center h-100">
+
+                            🔮<br>
+
+                            <strong>What If</strong>
+
+                        </div>
+
+                    </a>
+
+                </div>
+                <div class="col-6">
+
+                <a href="/student/resume-review"
+class="btn btn-dark w-100">
+
+🤖 AI Resume Review
+
+</a>
+</div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Chatbot -->
+
+    <div class="card shadow-sm border-0">
+
+        <div class="card-body">
+
+            <h2 class="h4 fw-bold mb-3">
+
+                🤖 Placement Intelligence Agent
+
+            </h2>
+
+            <div id="chat-box"
+
+                style="height:300px;
+                overflow-y:auto;
+                border:1px solid #ddd;
+                border-radius:10px;
+                padding:10px;
+                background:#f8f9fa;">
+
+                <div class="alert alert-info">
+
+                    👋 Hello!
+
+                    Ask me anything about your placement journey.
+
+                </div>
+
+            </div>
+
+            <div class="input-group mt-3">
+
+                <input
+
+                    id="chat-input"
+
+                    class="form-control"
+
+                    placeholder="Ask Placement AI..."
+
+                >
+
+                <button
+
+                    class="btn btn-primary"
+
+                    onclick="sendMessage()">
+
+                    Send
+
+                </button>
+
+            </div>
+
+            <div class="mt-3">
+
+                <button class="btn btn-outline-primary btn-sm m-1"
+
+                onclick="askSuggestion('What should I learn next?')">
+
+                    Learn Next
+
+                </button>
+
+                <button class="btn btn-outline-success btn-sm m-1"
+
+                onclick="askSuggestion('What skills am I missing?')">
+
+                    Missing Skills
+
+                </button>
+
+                <button class="btn btn-outline-warning btn-sm m-1"
+
+                onclick="askSuggestion('Which companies suit me?')">
+
+                    Closest Companies
+
+                </button>
+
+                <button class="btn btn-outline-danger btn-sm m-1"
+
+                onclick="askSuggestion('What if I learn Docker?')">
+
+                    What If
+
+                </button>
+                
+
+            </div>
+
+        </div>
+
+    </div>
+
+</aside>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function askSuggestion(question) {
+    const input = document.getElementById("chat-input");
+    if (!input) return;
+
+    input.value = question;
+    sendMessage();
+}
+
+function appendChatMessage(chat, content, kind = "assistant") {
+    const row = document.createElement("div");
+    row.className = kind === "user" ? "text-end mb-2" : "mb-2";
+    const bubble = document.createElement("span");
+    bubble.className = kind === "user" ? "badge bg-primary p-2" : (kind === "error" ? "badge bg-danger p-2" : "badge bg-success p-2 text-start");
+    bubble.style.whiteSpace = "pre-line";
+    bubble.textContent = content;
+    row.appendChild(bubble);
+    chat.appendChild(row);
+    chat.scrollTop = chat.scrollHeight;
+}
+
+function sendMessage() {
+    const input = document.getElementById("chat-input");
+    const chat = document.getElementById("chat-box");
+    if (!input || !chat) return;
+
+    const message = input.value.trim();
+    if (!message) return;
+    appendChatMessage(chat, message, "user");
+    input.value = "";
+
+    fetch("/student/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message })
+    })
+        .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+            appendChatMessage(
+                chat,
+                ok ? (data.response || "No response was returned.") : (data.error || "The placement assistant is unavailable."),
+                ok ? "assistant" : "error"
+            );
+        })
+        .catch(() => appendChatMessage(chat, "The placement assistant is unavailable. Please try again.", "error"));
+}
+
+
+const chatInput = document.getElementById("chat-input");
+if (chatInput) {
+    chatInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            sendMessage();
+        }
+    });
+}
+</script>
+{% endblock %}

@@ -2,10 +2,28 @@
 import sys
 import os
 import re
+import math
+import logging
+import json
+
+from ml.semantic_matcher import (
+    calculate_resume_job_score,
+    build_job_text,
+    build_profile_text,
+    has_compatible_resume_job_embeddings,
+)
+from ml.embedding_service import (
+    generate_embedding,
+    embedding_to_json,
+    embedding_matches_source,
+    json_to_embedding,
+)
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.db import get_db_connection
 from utils.email_utils import send_application_status_email
+
+logger = logging.getLogger(__name__)
 
 _STOPWORDS = {
     "and", "or", "the", "a", "an", "to", "for", "of", "in", "on", "with", "by",
@@ -23,6 +41,7 @@ _MATCH_WEIGHTS = {
 }
 
 _MATCH_THRESHOLD = 60
+_GENERATE_JOB_EMBEDDING = object()
 
 
 def _normalize_text(value):
@@ -40,12 +59,21 @@ def _extract_required_skill_phrases(required_skills):
     if not required_skills:
         return []
     chunks = [chunk.strip() for chunk in re.split(r"[,;/]", required_skills) if chunk.strip()]
-    return [_normalize_text(chunk) for chunk in chunks if _normalize_text(chunk)]
+    phrases = []
+    seen = set()
+    for chunk in chunks:
+        display_phrase = re.sub(r"\s+", " ", chunk).strip()
+        normalized = _normalize_text(display_phrase)
+        if normalized and normalized not in seen:
+            phrases.append(display_phrase)
+            seen.add(normalized)
+    return phrases
 
 
 def _to_float(value, default=0.0):
     try:
-        return float(value or default)
+        result = float(value or default)
+        return result if math.isfinite(result) else default
     except (TypeError, ValueError):
         return default
 
@@ -63,6 +91,59 @@ def _to_int(value, default=0):
         return int(value or default)
     except (TypeError, ValueError):
         return default
+
+
+def _embedding_trace(value, source_text):
+    """Return safe metadata for diagnosing stored vectors without logging their contents."""
+    try:
+        payload = json.loads(value) if isinstance(value, (str, bytes)) else value
+    except (TypeError, ValueError, json.JSONDecodeError):
+        payload = None
+    vector = json_to_embedding(value)
+    return {
+        "present": bool(value),
+        "dimensions": len(vector) if vector is not None else 0,
+        "finite": bool(vector is not None and all(math.isfinite(item) for item in vector)),
+        "nonzero": bool(vector is not None and any(item != 0 for item in vector)),
+        "model": payload.get("model", "legacy_or_missing") if isinstance(payload, dict) else "legacy_or_missing",
+        "source_match": embedding_matches_source(value, source_text),
+    }
+
+
+def _document_embedding_diagnostic(record, kind, source_text):
+    if kind == "resume":
+        document_url = record.get("resume_url")
+        document_text = record.get("resume_text")
+        label = "Student resume"
+        embedding_label = "Profile/resume embedding"
+    else:
+        document_url = record.get("jd_file_url")
+        document_text = record.get("jd_text")
+        label = "Job description"
+        embedding_label = "JD embedding"
+    if not document_url:
+        return f"{label} file is missing; upload the PDF/DOCX in {'My Profile' if kind == 'resume' else 'Admin > Jobs'}."
+    if not (document_text or "").strip():
+        return f"{label} file is saved, but extracted text is missing; re-upload a text-based PDF/DOCX."
+    stored = record.get("resume_embedding" if kind == "resume" else "job_embedding")
+    if not stored:
+        return f"{embedding_label} is missing; re-upload the document when the SentenceTransformer model is available."
+    vector = json_to_embedding(stored)
+    if vector is None:
+        return f"{embedding_label} is corrupt or contains non-finite values; regenerate it by re-uploading the document."
+    if len(vector) != 384 or not any(value != 0 for value in vector):
+        return f"{embedding_label} is invalid (expected a non-zero 384-dimensional vector); regenerate it by re-uploading the document."
+    try:
+        payload = json.loads(stored) if isinstance(stored, (str, bytes)) else stored
+    except (TypeError, ValueError):
+        payload = None
+    if not isinstance(payload, dict) or not payload.get("model"):
+        return f"{embedding_label} has no model metadata; regenerate it with all-MiniLM-L6-v2 by re-uploading the document."
+    if payload.get("model") != "sentence-transformers/all-MiniLM-L6-v2":
+        return f"{embedding_label} uses incompatible model {payload.get('model')}; regenerate it with all-MiniLM-L6-v2."
+    if not embedding_matches_source(stored, source_text):
+        return f"{embedding_label} is stale for the current extracted text; re-upload the document to regenerate it."
+    return None
 
 
 def _split_departments(value):
@@ -117,7 +198,21 @@ def _build_profile_tokens(profile):
 def _calculate_profile_job_match(profile, job):
     profile_tokens = _build_profile_tokens(profile)
     required_skill_phrases = _extract_required_skill_phrases(job.get("required_skills"))
-    required_skill_tokens = set(_tokenize(" ".join(required_skill_phrases)))
+    normalized_skill_phrases = [_normalize_text(phrase) for phrase in required_skill_phrases]
+    required_skill_tokens = set(_tokenize(" ".join(normalized_skill_phrases)))
+    profile_text = _normalize_text(" ".join(str(profile.get(field) or "") for field in (
+        "skills", "projects", "certifications", "department"
+    )))
+    matched_skills = []
+    missing_skills = []
+    for display_phrase, normalized_phrase in zip(required_skill_phrases, normalized_skill_phrases):
+        if re.search(
+            r"(?<![a-z0-9])" + re.escape(normalized_phrase) + r"(?![a-z0-9])",
+            profile_text,
+        ):
+            matched_skills.append(display_phrase)
+        else:
+            missing_skills.append(display_phrase)
 
     jd_text = " ".join([
         job.get("required_skills") or "",
@@ -143,6 +238,61 @@ def _calculate_profile_job_match(profile, job):
         + project_score * _MATCH_WEIGHTS["projects"]
         + certification_score * _MATCH_WEIGHTS["certifications"]
     )
+    semantic_available = has_compatible_resume_job_embeddings(profile, job)
+    semantic_score = None
+    semantic_error = False
+    profile_semantic_text = build_profile_text(profile).strip()
+    profile_vector_trace = _embedding_trace(profile.get("resume_embedding"), profile_semantic_text)
+    job_vector_trace = _embedding_trace(job.get("job_embedding"), build_job_text(job))
+    if semantic_available:
+        try:
+            semantic_score = calculate_resume_job_score(profile, job)
+            semantic_available = semantic_score is not None and math.isfinite(float(semantic_score))
+            if semantic_available:
+                logger.info(
+                    "semantic_pipeline stage=cosine_complete student_id=%s job_id=%s score=%.2f",
+                    profile.get("student_id"), job.get("id"), semantic_score,
+                )
+        except Exception:
+            logger.exception(
+                "semantic_pipeline stage=cosine_failed student_id=%s job_id=%s",
+                profile.get("student_id"), job.get("id"),
+            )
+            semantic_available = False
+            semantic_error = True
+    if not semantic_available:
+        logger.warning(
+            "semantic_pipeline stage=stored_vector_validation student_id=%s job_id=%s "
+            "resume_text_chars=%d profile_source_chars=%d resume_vector_dims=%d resume_finite=%s resume_nonzero=%s "
+            "resume_model=%s resume_source_match=%s jd_text_chars=%d jd_vector_dims=%d "
+            "jd_finite=%s jd_nonzero=%s jd_model=%s jd_source_match=%s",
+            profile.get("student_id"), job.get("id"),
+            len((profile.get("resume_text") or "").strip()), len(profile_semantic_text),
+            profile_vector_trace["dimensions"], profile_vector_trace["finite"],
+            profile_vector_trace["nonzero"], profile_vector_trace["model"],
+            profile_vector_trace["source_match"], len(build_job_text(job)),
+            job_vector_trace["dimensions"], job_vector_trace["finite"],
+            job_vector_trace["nonzero"], job_vector_trace["model"],
+            job_vector_trace["source_match"],
+        )
+
+    rule_score = max(0, min(100, round(_to_float(weighted_score))))
+    if semantic_available:
+        semantic_score = max(0.0, min(100.0, _to_float(semantic_score)))
+    else:
+        semantic_score = None
+
+    final_score = round((0.7 * rule_score) + (0.3 * semantic_score)) if semantic_available else rule_score
+    if semantic_available:
+        semantic_diagnostic = None
+    elif semantic_error:
+        semantic_diagnostic = "Cosine similarity could not be calculated from the stored vectors; re-upload the resume or JD after checking the model."
+    else:
+        semantic_diagnostic = (
+            _document_embedding_diagnostic(profile, "resume", profile_semantic_text)
+            or _document_embedding_diagnostic(job, "jd", build_job_text(job))
+            or "Cosine similarity could not be calculated from the stored 384-dimensional vectors."
+        )
 
     required_skill_gate = not required_skill_tokens or skills_score >= 0.35
     academic_gate = academics_score >= 0.65
@@ -151,7 +301,20 @@ def _calculate_profile_job_match(profile, job):
 
     return {
         "is_match": is_match,
-        "match_score": round(weighted_score),
+        "match_score": final_score,
+        "rule_score": rule_score,
+        "semantic_score": semantic_score,
+        "semantic_available": semantic_available,
+        "semantic_diagnostic": semantic_diagnostic,
+        "explainability": {
+        "matched_skills": matched_skills[:8],
+        "missing_skills": missing_skills[:8],
+        },
+        "match_gates": {
+            "required_skill_gate": required_skill_gate,
+            "academic_gate": academic_gate,
+            "department_gate": department_gate,
+        },
         "match_breakdown": {
             "skills": round(skills_score * 100),
             "role": round(role_score * 100),
@@ -191,13 +354,51 @@ def ensure_application_status_audit_table():
         connection.close()
 
 
+def ensure_job_embedding_column():
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SHOW COLUMNS FROM jobs LIKE 'job_embedding'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE jobs ADD COLUMN job_embedding LONGTEXT NULL")
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def ensure_job_description_columns():
+    """Add storage for uploaded job-description files and extracted text."""
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SHOW COLUMNS FROM jobs LIKE 'jd_text'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE jobs ADD COLUMN jd_text LONGTEXT NULL")
+            cursor.execute("SHOW COLUMNS FROM jobs LIKE 'jd_file_url'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE jobs ADD COLUMN jd_file_url VARCHAR(255) NULL")
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def get_jobs_matching_profile(student_id):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT s.department, sp.cgpa, sp.skills, sp.projects, sp.certifications, sp.backlog_count
+                SELECT s.id AS student_id,
+                s.department,
+                sp.cgpa,
+                sp.skills,
+                sp.projects,
+                sp.certifications,
+                sp.backlog_count,
+                sp.resume_text,
+                sp.resume_url,
+                sp.resume_embedding,
+                sp.embedding_generated
                 FROM students s
                 LEFT JOIN student_profiles sp ON sp.student_id = s.id
                 WHERE s.id = %s
@@ -210,9 +411,10 @@ def get_jobs_matching_profile(student_id):
                 return []
 
             profile_tokens = _build_profile_tokens(student_profile)
-            if not profile_tokens["all"]:
+            if not profile_tokens["all"] and not (student_profile.get("resume_text") or "").strip():
                 return []
 
+            # The admin form requires an application deadline; NULL is not active.
             cursor.execute(
                 """
                 SELECT j.*, c.name as company_name, c.website_url
@@ -224,6 +426,12 @@ def get_jobs_matching_profile(student_id):
             )
             jobs = cursor.fetchall()
 
+        logger.info(
+            "semantic_pipeline stage=mysql_retrieval student_id=%s resume_text_chars=%d "
+            "resume_embedding_present=%s jobs_retrieved=%d",
+            student_id, len((student_profile.get("resume_text") or "").strip()),
+            bool(student_profile.get("resume_embedding")), len(jobs or []),
+        )
         matched_jobs = []
         for job in jobs:
             match_result = _calculate_profile_job_match(student_profile, job)
@@ -231,19 +439,34 @@ def get_jobs_matching_profile(student_id):
                 job.update(match_result)
                 matched_jobs.append(job)
 
-        matched_jobs.sort(key=lambda item: item.get("match_score", 0), reverse=True)
+        matched_jobs.sort(
+            key=lambda item: (item.get("semantic_available", False), item.get("semantic_score") or -1),
+            reverse=True,
+        )
         return matched_jobs
     finally:
         connection.close()
 
 
 def get_all_active_jobs_with_match(student_id):
+
+
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT s.department, sp.cgpa, sp.skills, sp.projects, sp.certifications, sp.backlog_count
+                SELECT s.id AS student_id,
+                s.department,
+                sp.cgpa,
+                sp.skills,
+                sp.projects,
+                sp.certifications,
+                sp.backlog_count,
+                sp.resume_text,
+                sp.resume_url,
+                sp.resume_embedding,
+                sp.embedding_generated
                 FROM students s
                 LEFT JOIN student_profiles sp ON sp.student_id = s.id
                 WHERE s.id = %s
@@ -252,6 +475,7 @@ def get_all_active_jobs_with_match(student_id):
             )
             student_profile = cursor.fetchone()
 
+            # The admin form requires an application deadline; NULL is not active.
             cursor.execute(
                 """
                 SELECT j.*, c.name as company_name, c.website_url
@@ -261,16 +485,27 @@ def get_all_active_jobs_with_match(student_id):
                 ORDER BY j.created_at DESC
                 """
             )
-            jobs = cursor.fetchall()
+            jobs = list(cursor.fetchall() or [])
 
+        logger.info(
+            "semantic_pipeline stage=mysql_retrieval student_id=%s resume_text_chars=%d "
+            "resume_embedding_present=%s jobs_retrieved=%d",
+            student_id, len(((student_profile or {}).get("resume_text") or "").strip()),
+            bool((student_profile or {}).get("resume_embedding")), len(jobs),
+        )
         for job in jobs:
             match_result = _calculate_profile_job_match(student_profile or {}, job)
             job.update(match_result)
 
-        jobs.sort(key=lambda item: item.get("match_score", 0), reverse=True)
+        jobs.sort(
+            key=lambda item: (item.get("semantic_available", False), item.get("semantic_score") or -1),
+            reverse=True,
+        )
         return jobs
     finally:
         connection.close()
+
+
 
 def create_company(name, website_url, profile, past_history):
     connection = get_db_connection()
@@ -291,16 +526,101 @@ def get_all_companies():
     finally:
         connection.close()
 
-def create_job(company_id, title, role, location, ctc, eligibility_criteria, required_skills, allowed_departments, max_backlogs, min_cgpa, application_deadline):
+def create_job(company_id, title, role, location, ctc, eligibility_criteria, required_skills, allowed_departments, max_backlogs, min_cgpa, application_deadline, precomputed_embedding=_GENERATE_JOB_EMBEDDING, jd_text=None, jd_file_url=None):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
+            job_text = build_job_text({
+                "title": title,
+                "role": role,
+                "jd_text": jd_text,
+                "required_skills": required_skills,
+                "eligibility_criteria": eligibility_criteria,
+                "allowed_departments": allowed_departments,
+            })
+
+            if precomputed_embedding is _GENERATE_JOB_EMBEDDING:
+                try:
+                    job_embedding_json = embedding_to_json(generate_embedding(job_text), source_text=job_text)
+                except Exception as error:
+                    logger.warning("job_embedding_generation_failed category=%s", type(error).__name__)
+                    job_embedding_json = None
+            else:
+                job_embedding_json = precomputed_embedding
             sql = """
-            INSERT INTO jobs (company_id, title, role, location, ctc, eligibility_criteria, required_skills, allowed_departments, max_backlogs, min_cgpa, application_deadline) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(sql, (company_id, title, role, location, ctc, eligibility_criteria, required_skills, allowed_departments, max_backlogs, min_cgpa, application_deadline))
+                INSERT INTO jobs (
+                    company_id,
+                    title,
+                    role,
+                    location,
+                    ctc,
+                    eligibility_criteria,
+                    required_skills,
+                    allowed_departments,
+                    max_backlogs,
+                    min_cgpa,
+                    application_deadline,
+                    job_embedding,
+                    jd_text,
+                    jd_file_url
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                """
+
+            cursor.execute(sql, (
+                    company_id,
+                    title,
+                    role,
+                    location,
+                    ctc,
+                    eligibility_criteria,
+                    required_skills,
+                    allowed_departments,
+                    max_backlogs,
+                    min_cgpa,
+                    application_deadline,
+                    job_embedding_json,
+                    jd_text,
+                    jd_file_url
+                ))
+
+            job_id = cursor.lastrowid
+
+            connection.commit()
+            logger.info(
+                "semantic_pipeline stage=jd_database_storage job_id=%s text_chars=%d embedding_stored=%s",
+                job_id, len(job_text), bool(job_embedding_json),
+            )
+
+            try:
+                from services.context_builder import clear_all_student_context
+                clear_all_student_context()
+            except ImportError:
+                pass
+            return job_id
+    finally:
+            connection.close()
+
+
+def update_job_description(job_id, jd_text, jd_file_url, job_embedding):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """UPDATE jobs
+                   SET jd_text=%s, jd_file_url=%s, job_embedding=%s
+                   WHERE id=%s""",
+                (jd_text, jd_file_url, job_embedding, job_id),
+            )
         connection.commit()
+        try:
+            from services.context_builder import clear_all_student_context
+            clear_all_student_context()
+        except ImportError:
+            pass
     finally:
         connection.close()
 
@@ -343,7 +663,7 @@ def get_eligible_jobs(student_cgpa, student_backlogs, student_department):
             SELECT j.*, c.name as company_name, c.website_url
             FROM jobs j
             JOIN companies c ON j.company_id = c.id
-            WHERE j.min_cgpa <= %s 
+            WHERE j.min_cgpa <= %s
               AND j.max_backlogs >= %s
               AND (j.allowed_departments LIKE %s OR j.allowed_departments LIKE '%%All%%')
               AND j.application_deadline >= CURDATE()
@@ -367,14 +687,14 @@ def apply_job(student_id, job_id):
             cursor.execute("SELECT id FROM applications WHERE student_id = %s AND job_id = %s", (student_id, job_id))
             if cursor.fetchone():
                 return False, "Already applied to this job."
-                
+
             sql = "INSERT INTO applications (student_id, job_id) VALUES (%s, %s)"
             cursor.execute(sql, (student_id, job_id))
             application_id = cursor.lastrowid
-            
+
             status_sql = "INSERT INTO application_status (application_id, stage) VALUES (%s, 'Applied')"
             cursor.execute(status_sql, (application_id,))
-            
+
         connection.commit()
         return True, "Successfully applied"
     except pymysql.MySQLError as e:
@@ -532,7 +852,7 @@ def get_placement_stats(year=None, department=None):
                 cursor.execute("SELECT count(*) as total FROM students")
             total_students_row = cursor.fetchone()
             total_students = total_students_row['total'] if total_students_row and total_students_row['total'] > 0 else 1
-            
+
             stats = {
                 'total_placed': len(placements),
                 'placement_percentage': int((len(placements) / total_students) * 100),
@@ -541,17 +861,17 @@ def get_placement_stats(year=None, department=None):
                 'dept_data': {},
                 'company_data': {}
             }
-            
+
             total_ctc = 0
             valid_ctc_count = 0
-            
+
             for p in placements:
                 dept = p['department']
                 stats['dept_data'][dept] = stats['dept_data'].get(dept, 0) + 1
-                
+
                 company = p['company_name']
                 stats['company_data'][company] = stats['company_data'].get(company, 0) + 1
-                
+
                 try:
                     num = _parse_ctc_amount(p['ctc'])
                     if num <= 0:
@@ -562,7 +882,7 @@ def get_placement_stats(year=None, department=None):
                     valid_ctc_count += 1
                 except:
                     pass
-                    
+
             if valid_ctc_count > 0:
                 stats['average_ctc'] = round(total_ctc / valid_ctc_count, 2)
 
@@ -802,3 +1122,5 @@ def get_placement_filter_options():
             }
     finally:
         connection.close()
+def calculate_student_job_match(profile, job):
+    return _calculate_profile_job_match(profile, job)

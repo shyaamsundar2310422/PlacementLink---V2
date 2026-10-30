@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+<div class="card shadow border-0">
+
+<div class="card-body">
+
+<h2>
+
+📚 Personalized Learning Roadmap
+
+</h2>
+
+<p class="text-muted">
+
+Learn these skills to maximize your placement opportunities.
+
+</p>
+
+<hr>
+
+{% if recommendations %}
+
+{% for skill, count in recommendations %}
+
+<div class="card mb-3 border-start border-4 border-success">
+
+<div class="card-body">
+
+<h4>
+
+⭐ Priority {{ loop.index }}
+
+</h4>
+
+<h3>
+
+{{ skill|title }}
+
+</h3>
+
+<p>
+
+Unlocks approximately
+
+<strong>
+
+{{ count }}
+
+</strong>
+
+additional job opportunities.
+
+</p>
+
+<div class="progress">
+
+<div class="progress-bar bg-success"
+
+style="width:{{ (count*5) if (count*5)<100 else 100 }}%;">
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+{% endfor %}
+
+{% else %}
+
+<div class="alert alert-success">
+
+🎉 Your profile is already well aligned with current job requirements.
+
+</div>
+
+{% endif %}
+
+</div>
+
+</div>
+
+</div>
+
+{% endblock %}
